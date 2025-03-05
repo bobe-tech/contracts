@@ -19,6 +19,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
 
     address public adminAddress;
     address public mainTokenAddress;
+    bool private mainTokenInitialized;
     uint256 public mainTokenPriceInUsdt;
 
     address public constant SMART_ROUTER_ADDRESS = 0x13f4EA83D0bd40E75C8222255bc855a974568Dd4;
@@ -35,6 +36,8 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
     event PriceUpdated(uint256 newPrice);
     event TokenAllowed(address token);
     event TokenDisallowed(address token);
+    event MainTokenSet(address mainToken);
+    event AdminAddressSet(address admin);
 
     event TokensPurchased(
         address indexed user,
@@ -48,7 +51,8 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
     function initialize() public initializer {
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         adminAddress = _msgSender();
-        mainTokenPriceInUsdt = 1100000000000000000; // 1.1 USDT
+        mainTokenPriceInUsdt = 1100000000000000000;
+        mainTokenInitialized = false;
 
         allowedStableTokens[USDT_ADDRESS] = true;
         allowedStableTokens[FDUSD_ADDRESS] = true;
@@ -59,11 +63,17 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
     }
 
     function setMainTokenAddress(address _mainTokenAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(!mainTokenInitialized, "Main token address can only be set once");
+        require(_mainTokenAddress != address(0), "Invalid main token address");
         mainTokenAddress = _mainTokenAddress;
+        mainTokenInitialized = true;
+        emit MainTokenSet(_mainTokenAddress);
     }
 
     function setAdminAddress(address _adminAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_adminAddress != address(0), "Invalid admin address");
         adminAddress = _adminAddress;
+        emit AdminAddressSet(_adminAddress);
     }
 
     function setPrice(uint256 _newPrice) public onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -99,13 +109,14 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
 
         uint8 priceDecimals = bnbPriceFeed.decimals();
         uint256 usdtPriceValue =  convertDecimals(uint256(price), priceDecimals, 18);
-        
+
         return usdtPriceValue * amount / 1e18;
     }
 
     function swapNativeToken() external payable {
         uint256 tokenAmount = msg.value;
         require(tokenAmount > 0, "Amount must be greater than 0");
+        require(mainTokenInitialized, "Main token address must be set first");
 
         (bool success,) = payable(adminAddress).call{value: msg.value}("");
         require(success, "Failed to send BNB");
@@ -115,7 +126,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
 
 
         uint256 mainTokenAmount = (usdtValue * 1e18) / mainTokenPriceInUsdt;
-        require(IERC20(mainTokenAddress).balanceOf(address(this)) >= mainTokenAmount, 
+        require(IERC20(mainTokenAddress).balanceOf(address(this)) >= mainTokenAmount,
             "Insufficient main token balance");
         IERC20(mainTokenAddress).safeTransfer(msg.sender, mainTokenAmount);
 
@@ -131,6 +142,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
     function swapStableTokens(address token, uint256 amountIn) external payable {
         require(amountIn > 0, "Amount must be greater than 0");
         require(allowedStableTokens[token], "Token not allowed");
+        require(mainTokenInitialized, "Main token address must be set first");
 
         IERC20(token).transferFrom(msg.sender, adminAddress, amountIn);
 
@@ -139,7 +151,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
 
 
         uint256 mainTokenAmount = (usdtValue * 1e18) / mainTokenPriceInUsdt;
-        require(IERC20(mainTokenAddress).balanceOf(address(this)) >= mainTokenAmount, 
+        require(IERC20(mainTokenAddress).balanceOf(address(this)) >= mainTokenAmount,
             "Insufficient main token balance");
         IERC20(mainTokenAddress).safeTransfer(msg.sender, mainTokenAmount);
 
@@ -158,26 +170,22 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         bytes calldata swapCalldata
     ) external payable {
         require(amountIn > 0, "Amount must be greater than 0");
+        require(mainTokenInitialized, "Main token address must be set first");
 
-        // usdtBefore
         uint256 usdtBefore = IERC20(USDT_ADDRESS).balanceOf(adminAddress);
 
-        // deposit tokens to this contract and approve them for the router contract
         IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
         IERC20(tokenIn).approve(SMART_ROUTER_ADDRESS, amountIn);
 
-        // router
         (bool success,) = SMART_ROUTER_ADDRESS.call{value: msg.value}(swapCalldata);
         require(success, "Swap failed");
 
-        // usdtAfter
         uint256 usdtAfter = IERC20(USDT_ADDRESS).balanceOf(adminAddress);
         uint256 usdtReceived = usdtAfter - usdtBefore;
         require(usdtReceived > 0, "Invalid USDT amount");
 
-        // 1e18 because of mainToken decimals
         uint256 mainTokenAmount = (usdtReceived * 1e18) / mainTokenPriceInUsdt;
-        require(IERC20(mainTokenAddress).balanceOf(address(this)) >= mainTokenAmount, 
+        require(IERC20(mainTokenAddress).balanceOf(address(this)) >= mainTokenAmount,
             "Insufficient main token balance");
         IERC20(mainTokenAddress).safeTransfer(msg.sender, mainTokenAmount);
 
@@ -189,5 +197,4 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
             mainTokenAmount
         );
     }
-
 }

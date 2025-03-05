@@ -20,16 +20,23 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
     event Unstake(address user, uint256 amount);
     event ClaimRewards(address user, uint256 amount);
 
+    event TokenAddressesSet(address stakingToken, address rewardsToken);
+    event CampaignDurationSet(uint256 duration);
+    event UnstakePeriodSet(uint256 period);
+
     address[] public allStakers;
 
-    address public token;
+    address public stakingToken;
     address public rewardsToken;
+    bool private tokensInitialized;
 
     uint256 public deposited;
     uint256 public distributed;
+    uint256 public totalAllocatedRewards;
+    uint256 public totalRewardsCommitted;
 
-    uint256 public campaign_duration;
-    uint256 public unstake_period;
+    uint256 public campaignDuration;
+    uint256 public unstakePeriod;
 
     uint256 public scStartTimestamp;
     uint256 public scFinishTimestamp;
@@ -48,52 +55,69 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
     mapping(address => uint256[]) public userStakeAmounts;
     mapping(address => uint256[]) public userStakeTimes;
-    
+
     bytes32 public constant ANNOUNCER_ROLE = keccak256("ANNOUNCER_ROLE");
 
     function initialize() public initializer {
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(ANNOUNCER_ROLE, _msgSender());
-        campaign_duration = (23*60 + 58) * 60;
-        unstake_period = 365 * 24 * 3600;
+        campaignDuration = (23*60 + 58) * 60;
+        unstakePeriod = 365 * 24 * 3600;
+        tokensInitialized = false;
+        totalAllocatedRewards = 0;
+        totalRewardsCommitted = 0;
     }
 
-    function setTokenAddresses(address _token, address _rewardsToken) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        token = _token;
+    function setTokenAddresses(address _stakingToken, address _rewardsToken) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(!tokensInitialized, "Token addresses can only be set once");
+        require(_stakingToken != address(0), "Invalid staking token address");
+        require(_rewardsToken != address(0), "Invalid rewards token address");
+        require(_stakingToken != _rewardsToken, "Staking and rewards tokens must be different");
+
+        stakingToken = _stakingToken;
         rewardsToken = _rewardsToken;
+        tokensInitialized = true;
+
+        emit TokenAddressesSet(_stakingToken, _rewardsToken);
     }
 
     function setCampaignDuration(uint256 _duration) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(_duration > 0, "Duration must be > 0");
-        campaign_duration = _duration;
+        campaignDuration = _duration;
+
+        emit CampaignDurationSet(_duration);
     }
 
     function setUnstakePeriod(uint256 _period) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(_period > 0, "Duration must be > 0");
-        unstake_period = _period;
+        unstakePeriod = _period;
+
+        emit UnstakePeriodSet(_period);
     }
-    
+
     function withdraw(address tokenAddress, uint256 amount) public onlyRole(DEFAULT_ADMIN_ROLE) {
         require(amount > 0, "Amount must be > 0");
-        
+
         uint256 balance = IERC20(tokenAddress).balanceOf(address(this));
         require(balance >= amount, "Insufficient token balance");
 
-        if (tokenAddress == token) {
+        if (tokenAddress == stakingToken) {
             require(balance - amount >= globalStake, "Cannot withdraw staked tokens");
-
         } else if (tokenAddress == rewardsToken) {
+            uint256 pendingRewards = totalRewardsCommitted - distributed;
+            uint256 availableForWithdrawal = deposited - pendingRewards;
+            require(amount <= availableForWithdrawal, "Cannot withdraw reserved reward tokens");
             deposited -= amount;
         }
-        
+
         IERC20(tokenAddress).safeTransfer(_msgSender(), amount);
-        
+
         emit Withdraw(amount);
     }
 
-
     function deposit(uint256 amount) public {
         require(amount > 0, "Amount must be > 0");
+        require(tokensInitialized, "Token addresses must be set first");
 
         deposited += amount;
         IERC20(rewardsToken).safeTransferFrom(_msgSender(), address(this), amount);
@@ -103,18 +127,24 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
     function announce(uint256 rewardsAmount) public {
         require(
-            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()) || 
+            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()) ||
             hasRole(ANNOUNCER_ROLE, _msgSender()),
             "Caller must be admin or announcer"
         );
-        require(scFinishTimestamp < block.timestamp, "the previous campaign hasn't finished");
-        require(rewardsAmount > 0, "rewards amount must be greater than zero");
+        require(scFinishTimestamp < block.timestamp, "The previous campaign hasn't finished");
+        require(rewardsAmount > 0, "Rewards amount must be greater than zero");
+        require(tokensInitialized, "Token addresses must be set first");
 
         _updateGlobalIndex();
-        require(deposited - distributed >= rewardsAmount, "not enough deposit for the campaign");
+
+        uint256 pendingRewards = totalRewardsCommitted - distributed;
+        uint256 availableForAllocation = deposited - pendingRewards;
+        require(availableForAllocation >= rewardsAmount, "Not enough deposit for the campaign");
+
+        totalRewardsCommitted += rewardsAmount;
 
         scStartTimestamp = block.timestamp;
-        scFinishTimestamp = scStartTimestamp + campaign_duration;
+        scFinishTimestamp = scStartTimestamp + campaignDuration;
         scRewardsAmount = rewardsAmount;
 
         emit Announce(scStartTimestamp, scFinishTimestamp, scRewardsAmount);
@@ -122,14 +152,13 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
     function depositAndAnnounce(uint256 depositAmount) public {
         require(
-            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()) || 
+            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()) ||
             hasRole(ANNOUNCER_ROLE, _msgSender()),
             "Caller must be admin or announcer"
         );
         deposit(depositAmount);
         announce(depositAmount);
     }
-
 
     function getAvailableRewards() public view returns (
         uint256 distributedExactly,
@@ -144,15 +173,18 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
             }
             totalDistributed += totalClaimedRewards[staker];
         }
-        
+
+        uint256 pendingRewards = totalRewardsCommitted - distributed;
+
         return (
             totalDistributed,
-            deposited - totalDistributed
+            deposited - pendingRewards
         );
     }
 
     function stake(uint256 amount) public {
         require(amount > 0, "Amount must be > 0");
+        require(tokensInitialized, "Token addresses must be set first");
 
         _updateGlobalIndex();
         _updateLocalIndex(_msgSender());
@@ -167,7 +199,7 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         userStakeAmounts[_msgSender()].push(amount);
         userStakeTimes[_msgSender()].push(block.timestamp);
 
-        IERC20(token).safeTransferFrom(_msgSender(), address(this), amount);
+        IERC20(stakingToken).safeTransferFrom(_msgSender(), address(this), amount);
 
         emit Stake(_msgSender(), amount);
     }
@@ -183,10 +215,10 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
         globalStake -= amount;
         localStake[_msgSender()] -= amount;
-        
+
         totalUnstaked[_msgSender()] += amount;
 
-        IERC20(token).safeTransfer(_msgSender(), amount);
+        IERC20(stakingToken).safeTransfer(_msgSender(), amount);
 
         emit Unstake(_msgSender(), amount);
     }
@@ -195,29 +227,31 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         uint256[] memory amounts = userStakeAmounts[user];
         uint256[] memory times = userStakeTimes[user];
         uint256 unlockable = 0;
-        
+
         for(uint i = 0; i < amounts.length; i++) {
-            if (block.timestamp - times[i] >= unstake_period) {
+            if (block.timestamp - times[i] >= unstakePeriod) {
                 unlockable += amounts[i];
             }
         }
-        
+
         uint256 totalUnstakedAmount = totalUnstaked[user];
         if (unlockable <= totalUnstakedAmount) {
             return 0;
         }
-        
+
         return unlockable - totalUnstakedAmount;
     }
 
     function claimRewards() public {
+        require(tokensInitialized, "Token addresses must be set first");
+
         _updateGlobalIndex();
         _updateLocalIndex(_msgSender());
 
         uint256 amount = localRewards[_msgSender()];
-        require(amount > 0, "no rewards");
+        require(amount > 0, "No rewards");
 
-        localRewards[_msgSender()] = 0;  
+        localRewards[_msgSender()] = 0;
 
         totalClaimedRewards[_msgSender()] += amount;
 
@@ -225,7 +259,6 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
         emit ClaimRewards(_msgSender(), amount);
     }
-
 
     function _updateGlobalIndex() private {
         uint256 previousGlobalIndex = globalIndex;
@@ -259,7 +292,6 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         return localRewards[addr] + localStake[addr] * (index() - localIndex[addr]) / 1e18;
     }
 
-
     function getUserStats(address user) public view returns (
         uint256 currentStake,
         uint256 pendingRewards,
@@ -271,7 +303,7 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         uint256 unlockedAmount,
         uint256 totalUnstakedAmount,
         uint256 unstakePeriod,
-        uint256 tokenBalance 
+        uint256 tokenBalance
     ) {
         uint256 userRewardRate = 0;
         if (block.timestamp >= scStartTimestamp && block.timestamp <= scFinishTimestamp) {
@@ -288,8 +320,8 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
             userStakeTimes[user],
             getUnlockableAmount(user),
             totalUnstaked[user],
-            unstake_period,
-            IERC20(token).balanceOf(user)
+            unstakePeriod,
+            IERC20(stakingToken).balanceOf(user)
         );
     }
 
@@ -325,16 +357,15 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
             globalStake,
             allStakers.length,
             currentStakerCount,
-            
+
             distributedExactly,
             availableRewards,
 
             scRewardsAmount,
             scStartTimestamp,
             scFinishTimestamp,
-            
+
             currentRate
         );
     }
-
 }
