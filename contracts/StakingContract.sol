@@ -104,8 +104,7 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         if (tokenAddress == stakingToken) {
             require(balance - amount >= globalStake, "Cannot withdraw staked tokens");
         } else if (tokenAddress == rewardsToken) {
-            uint256 pendingRewards = totalRewardsCommitted - distributed;
-            uint256 availableForWithdrawal = deposited - pendingRewards;
+            uint256 availableForWithdrawal = deposited - totalRewardsCommitted;
             require(amount <= availableForWithdrawal, "Cannot withdraw reserved reward tokens");
             deposited -= amount;
         }
@@ -137,11 +136,9 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
         _updateGlobalIndex();
 
-        uint256 pendingRewards = totalRewardsCommitted - distributed;
-        uint256 availableForAllocation = deposited - pendingRewards;
-        require(availableForAllocation >= rewardsAmount, "Not enough deposit for the campaign");
+        require(deposited - distributed >= rewardsAmount, "Not enough deposit for the campaign");
 
-        totalRewardsCommitted += rewardsAmount;
+        totalRewardsCommitted = distributed + rewardsAmount;
 
         scStartTimestamp = block.timestamp;
         scFinishTimestamp = scStartTimestamp + campaignDuration;
