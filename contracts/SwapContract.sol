@@ -66,25 +66,25 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         bnbPriceFeed = AggregatorV3Interface(0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE);
     }
 
-    function setMainTokenAddress(address _mainTokenAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setMainTokenAddress(address newMainTokenAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
         require(!mainTokenInitialized, "Main token address can only be set once");
-        require(_mainTokenAddress != address(0), "Invalid main token address");
-        mainTokenAddress = _mainTokenAddress;
+        require(newMainTokenAddress != address(0), "Invalid main token address");
+        mainTokenAddress = newMainTokenAddress;
         mainTokenInitialized = true;
-        emit MainTokenSet(_mainTokenAddress);
+        emit MainTokenSet(newMainTokenAddress);
     }
 
-    function setFundingAddress(address _fundingAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_fundingAddress != address(0), "Invalid funding address");
-        fundingAddress = _fundingAddress;
-        emit FundingAddressSet(_fundingAddress);
+    function setFundingAddress(address newFundingAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newFundingAddress != address(0), "Invalid funding address");
+        fundingAddress = newFundingAddress;
+        emit FundingAddressSet(newFundingAddress);
     }
 
-    function setPrice(uint256 _newPrice) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_newPrice > 0, "Price must be greater than 0");
-        require(_newPrice <= 100_000 * 10 ** 18, "Price is unreasonably high");
-        mainTokenPriceInUsdt = _newPrice;
-        emit PriceUpdated(_newPrice);
+    function setPrice(uint256 newPrice) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newPrice > 0, "Price must be greater than 0");
+        require(newPrice <= 100_000 * 10 ** 18, "Price is unreasonably high");
+        mainTokenPriceInUsdt = newPrice;
+        emit PriceUpdated(newPrice);
     }
 
     function allowStableToken(address token) public onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -108,11 +108,11 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         }
     }
 
-    function disallowStableToken(address _token) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(allowedStableTokens[_token], "Token not found in allowed lists");
-        allowedStableTokens[_token] = false;
+    function disallowStableToken(address tokenAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(allowedStableTokens[tokenAddress], "Token not found in allowed lists");
+        allowedStableTokens[tokenAddress] = false;
 
-        emit TokenDisallowed(_token);
+        emit TokenDisallowed(tokenAddress);
     }
 
     function convertDecimals(uint256 value, uint256 sourceDecimals, uint256 targetDecimals) public pure returns (uint256) {

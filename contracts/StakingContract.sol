@@ -68,32 +68,32 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         totalRewardsCommitted = 0;
     }
 
-    function setTokenAddresses(address _stakingToken, address _rewardsToken) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setTokenAddresses(address newStakingToken, address newRewardsToken) public onlyRole(DEFAULT_ADMIN_ROLE) {
         require(!tokensInitialized, "Token addresses can only be set once");
-        require(_stakingToken != address(0), "Invalid staking token address");
-        require(_rewardsToken != address(0), "Invalid rewards token address");
-        require(_stakingToken != _rewardsToken, "Staking and rewards tokens must be different");
+        require(newStakingToken != address(0), "Invalid staking token address");
+        require(newRewardsToken != address(0), "Invalid rewards token address");
+        require(newStakingToken != newRewardsToken, "Staking and rewards tokens must be different");
 
-        stakingToken = _stakingToken;
-        rewardsToken = _rewardsToken;
+        stakingToken = newStakingToken;
+        rewardsToken = newRewardsToken;
         tokensInitialized = true;
 
-        emit TokenAddressesSet(_stakingToken, _rewardsToken);
+        emit TokenAddressesSet(newStakingToken, newRewardsToken);
     }
 
-    function setCampaignDuration(uint256 _duration) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_duration > 0, "Duration must be > 0");
-        campaignDuration = _duration;
+    function setCampaignDuration(uint256 newDuration) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newDuration > 0, "Duration must be > 0");
+        campaignDuration = newDuration;
 
-        emit CampaignDurationSet(_duration);
+        emit CampaignDurationSet(newDuration);
     }
 
-    function setUnstakePeriod(uint256 _period) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_period > 0, "Duration must be > 0");
-        require(_period <= 365 days, "Duration too long");
-        unstakePeriod = _period;
+    function setUnstakePeriod(uint256 newPeriod) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newPeriod > 0, "Duration must be > 0");
+        require(newPeriod <= 365 days, "Duration too long");
+        unstakePeriod = newPeriod;
 
-        emit UnstakePeriodSet(_period);
+        emit UnstakePeriodSet(newPeriod);
     }
 
     function withdraw(address tokenAddress, uint256 amount) public onlyRole(DEFAULT_ADMIN_ROLE) {
