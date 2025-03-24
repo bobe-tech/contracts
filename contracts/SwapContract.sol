@@ -35,8 +35,6 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
 
     address public constant SMART_ROUTER_ADDRESS = 0x13f4EA83D0bd40E75C8222255bc855a974568Dd4;
 
-    address public constant WBNB_ADDRESS = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
-
     address public constant USDT_ADDRESS = 0x55d398326f99059fF775485246999027B3197955;
     address public constant FDUSD_ADDRESS = 0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409;
     address public constant DAI_ADDRESS = 0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3;
@@ -50,6 +48,8 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
     event MainTokenSet(address mainToken);
     event AdminAddressSet(address admin);
 
+    event NativeTokenPurchased(address indexed user, uint256 bnbAmount, uint256 usdtValue, uint256 mainTokenAmount);
+
     event TokensPurchased(
         address indexed user,
         address tokenIn,
@@ -61,13 +61,13 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
     function initialize() public initializer {
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         adminAddress = _msgSender();
-        mainTokenPriceInUsdt = 1100000000000000000;
+        setPrice(1100000000000000000);
         mainTokenInitialized = false;
 
-        allowedStableTokens[USDT_ADDRESS] = true;
-        allowedStableTokens[FDUSD_ADDRESS] = true;
-        allowedStableTokens[DAI_ADDRESS] = true;
-        allowedStableTokens[USDC_ADDRESS] = true;
+        allowStableToken(USDT_ADDRESS);
+        allowStableToken(FDUSD_ADDRESS);
+        allowStableToken(USDC_ADDRESS);
+        allowStableToken(DAI_ADDRESS);
 
         bnbPriceFeed = AggregatorV3Interface(0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE);
     }
@@ -93,21 +93,24 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         emit PriceUpdated(_newPrice);
     }
 
+    function allowStableToken(address token) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(token != address(0), "Zero address not allowed");
+        require(!allowedStableTokens[token], "Token already allowed");
+
+        bool isValidToken = false;
+        try IERC20Metadata(token).decimals() returns (uint8) {
+            isValidToken = true;
+        } catch {}
+
+        require(isValidToken, "Token must support IERC20Metadata interface");
+
+        allowedStableTokens[token] = true;
+        emit TokenAllowed(token);
+    }
+
     function allowStableTokens(address[] calldata tokens) public onlyRole(DEFAULT_ADMIN_ROLE) {
         for (uint i = 0; i < tokens.length; i++) {
-            require(tokens[i] != address(0), "Zero address not allowed");
-            require(!allowedStableTokens[token], "Token already allowed");
-
-            bool isValidToken = false;
-            try IERC20Metadata(tokens[i]).decimals() returns (uint8) {
-                isValidToken = true;
-            } catch {}
-
-            require(isValidToken, "Token must support IERC20Metadata interface");
-
-            allowedStableTokens[tokens[i]] = true;
-
-            emit TokenAllowed(tokens[i]);
+            allowStableToken(tokens[i]);
         }
     }
 
@@ -156,7 +159,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         );
         IERC20(mainTokenAddress).safeTransfer(msg.sender, mainTokenAmount);
 
-        emit TokensPurchased(msg.sender, WBNB_ADDRESS, tokenAmount, usdtValue, mainTokenAmount);
+        emit NativeTokenPurchased(msg.sender, tokenAmount, usdtValue, mainTokenAmount);
     }
 
     function swapStableTokens(address token, uint256 amountIn) external payable {
@@ -164,7 +167,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         require(allowedStableTokens[token], "Token not allowed");
         require(mainTokenInitialized, "Main token address must be set first");
 
-        IERC20(token).transferFrom(msg.sender, adminAddress, amountIn);
+        IERC20(token).safeTransferFrom(msg.sender, adminAddress, amountIn);
 
         uint8 tokenDecimals = IERC20Metadata(token).decimals();
         uint256 usdtValue = convertDecimals(amountIn, tokenDecimals, 18);
