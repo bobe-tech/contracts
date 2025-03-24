@@ -366,4 +366,77 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
             currentRate
         );
     }
+
+    function getStakersRewardsBatch(
+        uint256 offset,
+        uint256 batchSize
+    )
+        public
+        view
+        returns (
+            address[] memory stakers,
+            uint256[] memory stakersRewards,
+            uint256[] memory stakersClaimedRewards,
+            uint256[] memory totalRewards,
+            uint256[] memory stakersStakeAmount
+        )
+    {
+        require(offset < allStakers.length, "Offset out of bounds");
+        require(batchSize > 0, "Batch size must be greater than 0");
+
+        uint256 size = batchSize;
+        if (offset + batchSize > allStakers.length) {
+            size = allStakers.length - offset;
+        }
+
+        stakers = new address[](size);
+        stakersRewards = new uint256[](size);
+        stakersClaimedRewards = new uint256[](size);
+        totalRewards = new uint256[](size);
+        stakersStakeAmount = new uint256[](size);
+
+        for (uint i = 0; i < size; i++) {
+            stakers[i] = allStakers[offset + i];
+            stakersRewards[i] = rewards(allStakers[offset + i]);
+            stakersClaimedRewards[i] = totalClaimedRewards[allStakers[offset + i]];
+            totalRewards[i] = stakersRewards[i] + stakersClaimedRewards[i];
+            stakersStakeAmount[i] = localStake[allStakers[offset + i]];
+        }
+
+        return (stakers, stakersRewards, stakersClaimedRewards, totalRewards, stakersStakeAmount);
+    }
+
+    function getRewardsByAddresses(
+        address[] memory addresses
+    )
+        public
+        view
+        returns (
+            address[] memory stakers,
+            uint256[] memory stakersRewards,
+            uint256[] memory stakersClaimedRewards,
+            uint256[] memory totalRewards,
+            uint256[] memory stakersStakeAmount
+        )
+    {
+        require(addresses.length > 0, "Addresses array cannot be empty");
+
+        uint256 size = addresses.length;
+
+        stakers = new address[](size);
+        stakersRewards = new uint256[](size);
+        stakersClaimedRewards = new uint256[](size);
+        totalRewards = new uint256[](size);
+        stakersStakeAmount = new uint256[](size);
+
+        for (uint i = 0; i < size; i++) {
+            stakers[i] = addresses[i];
+            stakersRewards[i] = rewards(addresses[i]);
+            stakersClaimedRewards[i] = totalClaimedRewards[addresses[i]];
+            totalRewards[i] = stakersRewards[i] + stakersClaimedRewards[i];
+            stakersStakeAmount[i] = localStake[addresses[i]];
+        }
+
+        return (stakers, stakersRewards, stakersClaimedRewards, totalRewards, stakersStakeAmount);
+    }
 }
