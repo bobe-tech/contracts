@@ -38,42 +38,18 @@ contract TokenContract is ERC20, Ownable {
     }
 
     function transferLiquidity(address to, uint256 value) external onlyOwner {
-        require(to != address(0), "Invalid address");
-        require(value > 0, "Value must be greater than 0");
-        require(value <= liquidityLeft, "Not enough tokens to transfer");
-        require(balanceOf(address(this)) > 0, "No tokens to transfer");
-
-        liquidityLeft -= value;
-
-        _transfer(address(this), to, value);
-
+        liquidityLeft = _transferTokens(to, value, liquidityLeft);
         emit LiquidityTransferred(to, value);
     }
 
     function transferMarketing(address to, uint256 value) external onlyOwner {
-        require(to != address(0), "Invalid address");
-        require(value > 0, "Value must be greater than 0");
-        require(value <= marketingLeft, "Not enough tokens to transfer");
-        require(balanceOf(address(this)) > 0, "No tokens to transfer");
-
-        marketingLeft -= value;
-
-        _transfer(address(this), to, value);
-
+        marketingLeft = _transferTokens(to, value, marketingLeft);
         emit MarketingTransferred(to, value);
     }
 
     function transferTeam(address to, uint256 value) external onlyOwner {
         require(block.timestamp >= teamUnlockTime, "Tokens are still locked");
-        require(to != address(0), "Invalid address");
-        require(value > 0, "Value must be greater than 0");
-        require(value <= teamLeft, "Not enough tokens to transfer");
-        require(balanceOf(address(this)) > 0, "No tokens to transfer");
-
-        teamLeft -= value;
-
-        _transfer(address(this), to, value);
-
+        teamLeft = _transferTokens(to, value, teamLeft);
         emit TeamTransferred(to, value);
     }
 
@@ -95,5 +71,21 @@ contract TokenContract is ERC20, Ownable {
     function teamUnlockIn() external view returns (uint256) {
         if (block.timestamp >= teamUnlockTime) return 0;
         return teamUnlockTime - block.timestamp;
+    }
+
+    function _transferTokens(
+        address to,
+        uint256 value,
+        uint256 availableAmount
+    ) internal returns (uint256) {
+        require(to != address(0), "Invalid address");
+        require(value > 0, "Value must be greater than 0");
+        require(value <= availableAmount, "Not enough tokens to transfer");
+        require(balanceOf(address(this)) >= value, "Insufficient balance");
+
+        uint256 remainingAmount = availableAmount - value;
+        _transfer(address(this), to, value);
+
+        return remainingAmount;
     }
 }
