@@ -61,8 +61,8 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
     function initialize() public initializer {
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(ANNOUNCER_ROLE, _msgSender());
-        campaignDuration = (23 * 60 + 58) * 60;
-        unstakePeriod = 365 * 24 * 3600;
+        setCampaignDuration(23 hours + 58 minutes);
+        setUnstakePeriod(365 days);
         tokensInitialized = false;
         totalAllocatedRewards = 0;
         totalRewardsCommitted = 0;
