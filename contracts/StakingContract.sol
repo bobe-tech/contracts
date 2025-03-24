@@ -301,7 +301,7 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
             uint256[] memory stakeTimes,
             uint256 unlockedAmount,
             uint256 totalUnstakedAmount,
-            uint256 unstakePeriod,
+            uint256 userUnstakePeriod,
             uint256 tokenBalance
         )
     {
