@@ -104,9 +104,14 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         if (tokenAddress == stakingToken) {
             require(balance - amount >= globalStake, "Cannot withdraw staked tokens");
         } else if (tokenAddress == rewardsToken) {
-            uint256 availableForWithdrawal = deposited - totalRewardsCommitted;
-            require(amount <= availableForWithdrawal, "Cannot withdraw reserved reward tokens");
-            deposited -= amount;
+            uint256 reservedTokens = totalRewardsCommitted - distributed;
+            require(balance - amount >= reservedTokens, "Cannot withdraw reserved reward tokens");
+
+            uint256 directTokens = balance - (deposited - distributed);
+
+            if (amount > directTokens) {
+                deposited -= amount - directTokens;
+            }
         }
 
         IERC20(tokenAddress).safeTransfer(_msgSender(), amount);
