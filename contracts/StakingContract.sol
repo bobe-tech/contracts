@@ -90,6 +90,7 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
     function setUnstakePeriod(uint256 _period) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(_period > 0, "Duration must be > 0");
+        require(_period <= 365 days, "Duration too long");
         unstakePeriod = _period;
 
         emit UnstakePeriodSet(_period);
