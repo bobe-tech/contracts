@@ -87,12 +87,24 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
     }
 
     function setPrice(uint256 _newPrice) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_newPrice > 0, "Price must be greater than 0");
+        require(_newPrice <= 100_000 * 10 ** 18, "Price is unreasonably high");
         mainTokenPriceInUsdt = _newPrice;
         emit PriceUpdated(_newPrice);
     }
 
     function allowStableTokens(address[] calldata tokens) public onlyRole(DEFAULT_ADMIN_ROLE) {
         for (uint i = 0; i < tokens.length; i++) {
+            require(tokens[i] != address(0), "Zero address not allowed");
+            require(!allowedStableTokens[token], "Token already allowed");
+
+            bool isValidToken = false;
+            try IERC20Metadata(tokens[i]).decimals() returns (uint8) {
+                isValidToken = true;
+            } catch {}
+
+            require(isValidToken, "Token must support IERC20Metadata interface");
+
             allowedStableTokens[tokens[i]] = true;
 
             emit TokenAllowed(tokens[i]);
