@@ -28,7 +28,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
 
     AggregatorV3Interface internal bnbPriceFeed;
 
-    address public adminAddress;
+    address public fundingAddress;
     address public mainTokenAddress;
     bool private mainTokenInitialized;
     uint256 public mainTokenPriceInUsdt;
@@ -46,7 +46,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
     event TokenAllowed(address token);
     event TokenDisallowed(address token);
     event MainTokenSet(address mainToken);
-    event AdminAddressSet(address admin);
+    event FundingAddressSet(address newAddress);
 
     event NativeTokenPurchased(address indexed user, uint256 bnbAmount, uint256 usdtValue, uint256 mainTokenAmount);
 
@@ -54,7 +54,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
 
     function initialize() public initializer {
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        adminAddress = _msgSender();
+        setFundingAddress(_msgSender());
         setPrice(1100000000000000000);
         mainTokenInitialized = false;
 
@@ -74,10 +74,10 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         emit MainTokenSet(_mainTokenAddress);
     }
 
-    function setAdminAddress(address _adminAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_adminAddress != address(0), "Invalid admin address");
-        adminAddress = _adminAddress;
-        emit AdminAddressSet(_adminAddress);
+    function setFundingAddress(address _fundingAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_fundingAddress != address(0), "Invalid funding address");
+        fundingAddress = _fundingAddress;
+        emit FundingAddressSet(_fundingAddress);
     }
 
     function setPrice(uint256 _newPrice) public onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -139,7 +139,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         require(tokenAmount > 0, "Amount must be greater than 0");
         require(mainTokenInitialized, "Main token address must be set first");
 
-        (bool success, ) = payable(adminAddress).call{value: msg.value}("");
+        (bool success, ) = payable(fundingAddress).call{value: msg.value}("");
         require(success, "Failed to send BNB");
 
         uint256 usdtValue = convertBnbToUsdt(tokenAmount);
@@ -157,10 +157,10 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         require(allowedStableTokens[token], "Token not allowed");
         require(mainTokenInitialized, "Main token address must be set first");
 
-        uint256 adminBalanceBefore = IERC20(token).balanceOf(adminAddress);
-        IERC20(token).safeTransferFrom(msg.sender, adminAddress, amountIn);
-        uint256 adminBalanceAfter = IERC20(token).balanceOf(adminAddress);
-        uint256 actualAmountIn = adminBalanceAfter - adminBalanceBefore;
+        uint256 fundingBalanceBefore = IERC20(token).balanceOf(fundingAddress);
+        IERC20(token).safeTransferFrom(msg.sender, fundingAddress, amountIn);
+        uint256 fundingBalanceAfter = IERC20(token).balanceOf(fundingAddress);
+        uint256 actualAmountIn = fundingBalanceAfter - fundingBalanceBefore;
         require(actualAmountIn > 0, "No tokens received");
 
         uint8 tokenDecimals = IERC20Metadata(token).decimals();
@@ -193,10 +193,10 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         uint256 actualAmountIn = tokenBalanceAfter - tokenBalanceBefore;
         require(actualAmountIn > 0, "No tokens received");
 
-        uint256 usdtBefore = IERC20(USDT_ADDRESS).balanceOf(adminAddress);
+        uint256 usdtBefore = IERC20(USDT_ADDRESS).balanceOf(fundingAddress);
         IERC20(tokenIn).approve(SMART_ROUTER_ADDRESS, actualAmountIn);
-        IPancakeSwapV3Router(SMART_ROUTER_ADDRESS).swapExactTokensForTokens(actualAmountIn, minAmountOut, path, adminAddress);
-        uint256 usdtAfter = IERC20(USDT_ADDRESS).balanceOf(adminAddress);
+        IPancakeSwapV3Router(SMART_ROUTER_ADDRESS).swapExactTokensForTokens(actualAmountIn, minAmountOut, path, fundingAddress);
+        uint256 usdtAfter = IERC20(USDT_ADDRESS).balanceOf(fundingAddress);
         uint256 usdtReceived = usdtAfter - usdtBefore;
         require(usdtReceived > 0, "No USDT received");
 
