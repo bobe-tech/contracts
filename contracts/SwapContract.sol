@@ -152,7 +152,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         emit NativeTokenPurchased(msg.sender, tokenAmount, usdtValue, mainTokenAmount);
     }
 
-    function swapStableTokens(address token, uint256 amountIn) external payable {
+    function swapStableTokens(address token, uint256 amountIn) external {
         require(amountIn > 0, "Amount must be greater than 0");
         require(allowedStableTokens[token], "Token not allowed");
         require(mainTokenInitialized, "Main token address must be set first");
@@ -173,7 +173,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         emit TokensPurchased(msg.sender, token, actualAmountIn, usdtValue, mainTokenAmount);
     }
 
-    function swapAnyTokens(address tokenIn, uint256 amountIn, address[] calldata path, uint256 userSlippageBps) external payable {
+    function swapAnyTokens(address tokenIn, uint256 amountIn, address[] calldata path, uint256 userSlippageBps) external {
         require(amountIn > 0, "Amount must be greater than 0");
         require(mainTokenInitialized, "Main token address must be set first");
         require(!allowedStableTokens[tokenIn], "Use swapStableTokens for stablecoins");
