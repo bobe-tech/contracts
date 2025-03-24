@@ -50,13 +50,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
 
     event NativeTokenPurchased(address indexed user, uint256 bnbAmount, uint256 usdtValue, uint256 mainTokenAmount);
 
-    event TokensPurchased(
-        address indexed user,
-        address tokenIn,
-        uint256 tokenInAmount,
-        uint256 usdtValue,
-        uint256 mainTokenAmount
-    );
+    event TokensPurchased(address indexed user, address tokenIn, uint256 tokenInAmount, uint256 usdtValue, uint256 mainTokenAmount);
 
     function initialize() public initializer {
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
@@ -121,19 +115,14 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         emit TokenDisallowed(_token);
     }
 
-    function convertDecimals(
-        uint256 value,
-        uint256 sourceDecimals,
-        uint256 targetDecimals
-    ) public pure returns (uint256) {
+    function convertDecimals(uint256 value, uint256 sourceDecimals, uint256 targetDecimals) public pure returns (uint256) {
         if (sourceDecimals == targetDecimals) return value;
         else if (sourceDecimals > targetDecimals) return value / (10 ** (sourceDecimals - targetDecimals));
         else return value * (10 ** (targetDecimals - sourceDecimals));
     }
 
     function convertBnbToUsdt(uint256 amount) public view returns (uint256) {
-        (uint80 roundId, int256 price, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) = bnbPriceFeed
-            .latestRoundData();
+        (uint80 roundId, int256 price, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) = bnbPriceFeed.latestRoundData();
 
         require(price > 0, "Invalid price");
         require(answeredInRound >= roundId, "Stale price");
@@ -157,10 +146,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         require(usdtValue > 0, "Failed to get price");
 
         uint256 mainTokenAmount = (usdtValue * 1e18) / mainTokenPriceInUsdt;
-        require(
-            IERC20(mainTokenAddress).balanceOf(address(this)) >= mainTokenAmount,
-            "Insufficient main token balance"
-        );
+        require(IERC20(mainTokenAddress).balanceOf(address(this)) >= mainTokenAmount, "Insufficient main token balance");
         IERC20(mainTokenAddress).safeTransfer(msg.sender, mainTokenAmount);
 
         emit NativeTokenPurchased(msg.sender, tokenAmount, usdtValue, mainTokenAmount);
@@ -171,27 +157,23 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         require(allowedStableTokens[token], "Token not allowed");
         require(mainTokenInitialized, "Main token address must be set first");
 
+        uint256 adminBalanceBefore = IERC20(token).balanceOf(adminAddress);
         IERC20(token).safeTransferFrom(msg.sender, adminAddress, amountIn);
+        uint256 adminBalanceAfter = IERC20(token).balanceOf(adminAddress);
+        uint256 actualAmountIn = adminBalanceAfter - adminBalanceBefore;
+        require(actualAmountIn > 0, "No tokens received");
 
         uint8 tokenDecimals = IERC20Metadata(token).decimals();
-        uint256 usdtValue = convertDecimals(amountIn, tokenDecimals, 18);
+        uint256 usdtValue = convertDecimals(actualAmountIn, tokenDecimals, 18);
 
         uint256 mainTokenAmount = (usdtValue * 1e18) / mainTokenPriceInUsdt;
-        require(
-            IERC20(mainTokenAddress).balanceOf(address(this)) >= mainTokenAmount,
-            "Insufficient main token balance"
-        );
+        require(IERC20(mainTokenAddress).balanceOf(address(this)) >= mainTokenAmount, "Insufficient main token balance");
         IERC20(mainTokenAddress).safeTransfer(msg.sender, mainTokenAmount);
 
-        emit TokensPurchased(msg.sender, token, amountIn, usdtValue, mainTokenAmount);
+        emit TokensPurchased(msg.sender, token, actualAmountIn, usdtValue, mainTokenAmount);
     }
 
-    function swapAnyTokens(
-        address tokenIn,
-        uint256 amountIn,
-        address[] calldata path,
-        uint256 userSlippageBps
-    ) external payable {
+    function swapAnyTokens(address tokenIn, uint256 amountIn, address[] calldata path, uint256 userSlippageBps) external payable {
         require(amountIn > 0, "Amount must be greater than 0");
         require(mainTokenInitialized, "Main token address must be set first");
         require(!allowedStableTokens[tokenIn], "Use swapStableTokens for stablecoins");
@@ -205,25 +187,25 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         uint256 expectedUsdtAmount = expectedAmounts[expectedAmounts.length - 1];
         uint256 minAmountOut = (expectedUsdtAmount * (10000 - userSlippageBps)) / 10000;
 
-        uint256 usdtBefore = IERC20(USDT_ADDRESS).balanceOf(adminAddress);
-
+        uint256 tokenBalanceBefore = IERC20(tokenIn).balanceOf(address(this));
         IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
-        IERC20(tokenIn).approve(SMART_ROUTER_ADDRESS, amountIn);
-        IPancakeSwapV3Router(SMART_ROUTER_ADDRESS).swapExactTokensForTokens(amountIn, minAmountOut, path, adminAddress);
+        uint256 tokenBalanceAfter = IERC20(tokenIn).balanceOf(address(this));
+        uint256 actualAmountIn = tokenBalanceAfter - tokenBalanceBefore;
+        require(actualAmountIn > 0, "No tokens received");
 
+        uint256 usdtBefore = IERC20(USDT_ADDRESS).balanceOf(adminAddress);
+        IERC20(tokenIn).approve(SMART_ROUTER_ADDRESS, actualAmountIn);
+        IPancakeSwapV3Router(SMART_ROUTER_ADDRESS).swapExactTokensForTokens(actualAmountIn, minAmountOut, path, adminAddress);
         uint256 usdtAfter = IERC20(USDT_ADDRESS).balanceOf(adminAddress);
         uint256 usdtReceived = usdtAfter - usdtBefore;
         require(usdtReceived > 0, "No USDT received");
 
         uint256 mainTokenAmount = (usdtReceived * 1e18) / mainTokenPriceInUsdt;
         require(mainTokenAmount > 0, "Main token amount is zero");
-        require(
-            IERC20(mainTokenAddress).balanceOf(address(this)) >= mainTokenAmount,
-            "Insufficient main token balance"
-        );
+        require(IERC20(mainTokenAddress).balanceOf(address(this)) >= mainTokenAmount, "Insufficient main token balance");
 
         IERC20(mainTokenAddress).safeTransfer(msg.sender, mainTokenAmount);
 
-        emit TokensPurchased(msg.sender, tokenIn, amountIn, usdtReceived, mainTokenAmount);
+        emit TokensPurchased(msg.sender, tokenIn, actualAmountIn, usdtReceived, mainTokenAmount);
     }
 }
