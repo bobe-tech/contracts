@@ -69,6 +69,10 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
     function setMainTokenAddress(address newMainTokenAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
         require(!mainTokenInitialized, "Main token address can only be set once");
         require(newMainTokenAddress != address(0), "Invalid main token address");
+
+        uint256 tokenBalance = IERC20(newMainTokenAddress).balanceOf(address(this));
+        require(tokenBalance > 0, "No tokens available on contract balance");
+
         mainTokenAddress = newMainTokenAddress;
         mainTokenInitialized = true;
         emit MainTokenSet(newMainTokenAddress);
