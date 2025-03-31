@@ -106,12 +106,6 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         emit TokenAllowed(token);
     }
 
-    function allowStableTokens(address[] calldata tokens) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        for (uint i = 0; i < tokens.length; i++) {
-            allowStableToken(tokens[i]);
-        }
-    }
-
     function disallowStableToken(address tokenAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
         require(allowedStableTokens[tokenAddress], "Token not found in allowed lists");
         allowedStableTokens[tokenAddress] = false;
