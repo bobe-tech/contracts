@@ -57,9 +57,9 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
     bytes32 public constant ANNOUNCER_ROLE = keccak256("ANNOUNCER_ROLE");
 
-    function initialize() public initializer {
-        _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        _grantRole(ANNOUNCER_ROLE, _msgSender());
+    function initialize(address adminMultisigAddress, address announcerMultisigAddress) public initializer {
+        _grantRole(DEFAULT_ADMIN_ROLE, adminMultisigAddress);
+        _grantRole(ANNOUNCER_ROLE, announcerMultisigAddress);
         campaignDuration = 23 hours + 58 minutes;
         setUnstakePeriod(365 days);
         tokensInitialized = false;
