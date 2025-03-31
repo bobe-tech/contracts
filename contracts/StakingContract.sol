@@ -61,7 +61,7 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
     function initialize() public initializer {
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(ANNOUNCER_ROLE, _msgSender());
-        setCampaignDuration(23 hours + 58 minutes);
+        campaignDuration = 23 hours + 58 minutes;
         setUnstakePeriod(365 days);
         tokensInitialized = false;
         totalAllocatedRewards = 0;
@@ -79,13 +79,6 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         tokensInitialized = true;
 
         emit TokenAddressesSet(newStakingToken, newRewardsToken);
-    }
-
-    function setCampaignDuration(uint256 newDuration) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(newDuration > 0, "Duration must be > 0");
-        campaignDuration = newDuration;
-
-        emit CampaignDurationSet(newDuration);
     }
 
     function setUnstakePeriod(uint256 newPeriod) external onlyRole(DEFAULT_ADMIN_ROLE) {
