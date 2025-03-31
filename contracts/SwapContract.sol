@@ -42,7 +42,6 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
 
     mapping(address => bool) public allowedStableTokens;
 
-    event PriceUpdated(uint256 newPrice);
     event TokenAllowed(address token);
     event TokenDisallowed(address token);
     event MainTokenSet(address mainToken);
@@ -55,7 +54,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
     function initialize() public initializer {
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         setFundingAddress(_msgSender());
-        setPrice(1100000000000000000);
+        mainTokenPriceInUsdt = 1_100_000_000_000_000_000;
         mainTokenInitialized = false;
 
         allowStableToken(USDT_ADDRESS);
@@ -82,13 +81,6 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         require(newFundingAddress != address(0), "Invalid funding address");
         fundingAddress = newFundingAddress;
         emit FundingAddressSet(newFundingAddress);
-    }
-
-    function setPrice(uint256 newPrice) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(newPrice > 0, "Price must be greater than 0");
-        require(newPrice <= 100_000 * 10 ** 18, "Price is unreasonably high");
-        mainTokenPriceInUsdt = newPrice;
-        emit PriceUpdated(newPrice);
     }
 
     function allowStableToken(address token) public onlyRole(DEFAULT_ADMIN_ROLE) {
