@@ -29,7 +29,9 @@ contract TokenContract is ERC20, Ownable {
     event MarketingTransferred(address indexed to, uint256 amount);
     event TeamTransferred(address indexed to, uint256 amount);
 
-    constructor() ERC20("Bobe.app", "BOBE") Ownable(_msgSender()) {
+    constructor(address multisigAddress) ERC20("Bobe.app", "BOBE") Ownable(multisigAddress) {
+        require(multisigAddress != address(0), "Safe multisig address cannot be zero");
+
         teamUnlockStart = block.timestamp + 548 days;
         marketingUnlockStart = block.timestamp;
 
@@ -60,7 +62,7 @@ contract TokenContract is ERC20, Ownable {
         uint256 totalSupply,
         uint256 tokensLeft,
         string memory errorMessage
-    ) private onlyOwner returns (uint256) {
+    ) private returns (uint256) {
         uint256 alreadyWithdrawn = totalSupply - tokensLeft;
         uint256 availableToWithdraw = unlockedAmount - alreadyWithdrawn;
 
