@@ -13,7 +13,6 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
     using SafeERC20 for IERC20;
 
     event Deposit(uint256 amount);
-    event Withdraw(uint256 amount);
     event Announce(uint256 start, uint256 finish, uint256 amount);
 
     event Stake(address user, uint256 amount);
@@ -87,30 +86,6 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         unstakePeriod = newPeriod;
 
         emit UnstakePeriodSet(newPeriod);
-    }
-
-    function withdraw(address tokenAddress, uint256 amount) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(amount > 0, "Amount must be > 0");
-
-        uint256 balance = IERC20(tokenAddress).balanceOf(address(this));
-        require(balance >= amount, "Insufficient token balance");
-
-        if (tokenAddress == stakingToken) {
-            require(balance - amount >= globalStake, "Cannot withdraw staked tokens");
-        } else if (tokenAddress == rewardsToken) {
-            uint256 reservedTokens = totalRewardsCommitted - distributed;
-            require(balance - amount >= reservedTokens, "Cannot withdraw reserved reward tokens");
-
-            uint256 directTokens = balance - (deposited - distributed);
-
-            if (amount > directTokens) {
-                deposited -= amount - directTokens;
-            }
-        }
-
-        IERC20(tokenAddress).safeTransfer(_msgSender(), amount);
-
-        emit Withdraw(amount);
     }
 
     function deposit(uint256 amount) public {
