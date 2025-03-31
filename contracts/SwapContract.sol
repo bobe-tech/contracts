@@ -51,9 +51,9 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
 
     event TokensPurchased(address indexed user, address tokenIn, uint256 tokenInAmount, uint256 usdtValue, uint256 mainTokenAmount);
 
-    function initialize() public initializer {
-        _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        setFundingAddress(_msgSender());
+    function initialize(address adminMultisigAddress, address fundingMultisigAddress) public initializer {
+        _grantRole(DEFAULT_ADMIN_ROLE, adminMultisigAddress);
+        setFundingAddress(fundingMultisigAddress);
         mainTokenPriceInUsdt = 1_100_000_000_000_000_000;
         mainTokenInitialized = false;
 
