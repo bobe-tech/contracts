@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -22,7 +23,7 @@ interface IPancakeSwapV3Router {
     function getAmountsOut(uint amountIn, address[] memory path) external view returns (uint[] memory amounts);
 }
 
-contract SwapContract is Initializable, AccessControlUpgradeable {
+contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     using Math for uint256;
     using SafeERC20 for IERC20;
 
@@ -52,6 +53,8 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
     event TokensPurchased(address indexed user, address tokenIn, uint256 tokenInAmount, uint256 usdtValue, uint256 mainTokenAmount);
 
     function initialize(address adminMultisigAddress, address fundingMultisigAddress) public initializer {
+        __AccessControl_init();
+        __ReentrancyGuard_init();
         _grantRole(DEFAULT_ADMIN_ROLE, adminMultisigAddress);
         setFundingAddress(fundingMultisigAddress);
         mainTokenPriceInUsdt = 1_100_000_000_000_000_000;
@@ -124,7 +127,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         return (usdtPriceValue * amount) / 1e18;
     }
 
-    function swapNativeToken() external payable {
+    function swapNativeToken() external payable nonReentrant {
         uint256 tokenAmount = msg.value;
         require(tokenAmount > 0, "Amount must be greater than 0");
         require(mainTokenInitialized, "Main token address must be set first");
@@ -142,7 +145,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         emit NativeTokenPurchased(msg.sender, tokenAmount, usdtValue, mainTokenAmount);
     }
 
-    function swapStableTokens(address token, uint256 amountIn) external {
+    function swapStableTokens(address token, uint256 amountIn) external nonReentrant {
         require(amountIn > 0, "Amount must be greater than 0");
         require(allowedStableTokens[token], "Token not allowed");
         require(mainTokenInitialized, "Main token address must be set first");
@@ -163,7 +166,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable {
         emit TokensPurchased(msg.sender, token, actualAmountIn, usdtValue, mainTokenAmount);
     }
 
-    function swapAnyTokens(address tokenIn, uint256 amountIn, address[] calldata path, uint256 userSlippageBps) external {
+    function swapAnyTokens(address tokenIn, uint256 amountIn, address[] calldata path, uint256 userSlippageBps) external nonReentrant {
         require(amountIn > 0, "Amount must be greater than 0");
         require(mainTokenInitialized, "Main token address must be set first");
         require(!allowedStableTokens[tokenIn], "Use swapStableTokens for stablecoins");
