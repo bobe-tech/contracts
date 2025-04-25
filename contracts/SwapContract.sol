@@ -67,6 +67,12 @@ contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuar
     function setUsdtAddress(address newUsdtAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newUsdtAddress != address(0), "USDT address cannot be zero");
         usdtAddress = newUsdtAddress;
+        
+        // Automatically add USDT to allowed stable tokens if not already allowed
+        if (!allowedStableTokens[newUsdtAddress]) {
+            allowStableToken(newUsdtAddress);
+        }
+        
         emit UsdtAddressSet(newUsdtAddress);
     }
     
@@ -119,6 +125,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuar
 
     function disallowStableToken(address tokenAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
         require(allowedStableTokens[tokenAddress], "Token not found in allowed lists");
+        require(tokenAddress != usdtAddress, "Cannot disallow USDT");
         allowedStableTokens[tokenAddress] = false;
 
         emit TokenDisallowed(tokenAddress);
