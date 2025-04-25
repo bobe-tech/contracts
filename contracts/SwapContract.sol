@@ -138,10 +138,9 @@ contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuar
     }
 
     function convertBnbToUsdt(uint256 amount) public view returns (uint256) {
-        (uint80 roundId, int256 price, , uint256 updatedAt, uint80 answeredInRound) = bnbPriceFeed.latestRoundData();
+        (, int256 price, , uint256 updatedAt, ) = bnbPriceFeed.latestRoundData();
 
         require(price > 0, "Invalid price");
-        require(answeredInRound >= roundId, "Stale price");
         require(block.timestamp - updatedAt <= 1 hours, "Oracle data too old");
 
         uint8 priceDecimals = bnbPriceFeed.decimals();
