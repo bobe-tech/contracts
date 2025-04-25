@@ -18,12 +18,10 @@ contract TokenContract is ERC20, Ownable {
     uint256 public immutable marketingSupply;
     uint256 public marketingLeft;
     uint256 public immutable marketingUnlockStart;
-    uint256 public marketingUnlockedPortions;
 
     uint256 public immutable teamSupply;
     uint256 public teamLeft;
     uint256 public immutable teamUnlockStart;
-    uint256 public teamUnlockedPortions;
 
     event LiquidityTransferred(address indexed to, uint256 amount);
     event MarketingTransferred(address indexed to, uint256 amount);
@@ -43,9 +41,6 @@ contract TokenContract is ERC20, Ownable {
         liquidityLeft = liquiditySupply;
         marketingLeft = marketingSupply;
         teamLeft = teamSupply;
-
-        marketingUnlockedPortions = 0;
-        teamUnlockedPortions = 0;
 
         _mint(address(this), totalSupply);
     }
