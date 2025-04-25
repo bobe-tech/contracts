@@ -15,8 +15,35 @@ The project consists of three main contracts:
 - Framework: Hardhat
 - Network: BNB Chain (BSC)
 - Dependencies:
- - OpenZeppelin Contracts
- - Chainlink Price Feeds
+  - OpenZeppelin Contracts
+  - Chainlink Price Feeds
+
+## Installation and Setup
+
+```bash
+# Install dependencies
+npm install
+
+# Compile contracts
+npx hardhat compile
+```
+
+## Testing
+
+The project includes comprehensive test suites for all contracts:
+
+```bash
+# Run all tests
+npx hardhat test
+
+# Run tests for a specific contract
+npx hardhat test test/TokenContract.test.js
+npx hardhat test test/SwapContract.test.js
+npx hardhat test test/StakingContract.test.js
+
+# Run tests with gas reporting
+REPORT_GAS=true npx hardhat test
+```
 
 ## Contracts Description
 

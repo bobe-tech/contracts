@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -27,19 +27,18 @@ contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuar
     using Math for uint256;
     using SafeERC20 for IERC20;
 
-    AggregatorV3Interface internal bnbPriceFeed;
+    AggregatorV3Interface public bnbPriceFeed;
 
     address public fundingAddress;
     address public mainTokenAddress;
     bool private mainTokenInitialized;
     uint256 public mainTokenPriceInUsdt;
 
-    address public constant SMART_ROUTER_ADDRESS = 0x13f4EA83D0bd40E75C8222255bc855a974568Dd4;
+    // Address of PancakeSwap V3 Router
+    address public smartRouterAddress;
 
-    address public constant USDT_ADDRESS = 0x55d398326f99059fF775485246999027B3197955;
-    address public constant FDUSD_ADDRESS = 0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409;
-    address public constant DAI_ADDRESS = 0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3;
-    address public constant USDC_ADDRESS = 0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d;
+    // USDT address is needed for swapAnyTokens
+    address public usdtAddress;
 
     mapping(address => bool) public allowedStableTokens;
 
@@ -47,6 +46,9 @@ contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuar
     event TokenDisallowed(address token);
     event MainTokenSet(address mainToken);
     event FundingAddressSet(address newAddress);
+    event UsdtAddressSet(address newUsdtAddress);
+    event BnbPriceFeedSet(address newPriceFeedAddress);
+    event SmartRouterSet(address newRouterAddress);
 
     event NativeTokenPurchased(address indexed user, uint256 bnbAmount, uint256 usdtValue, uint256 mainTokenAmount);
 
@@ -59,13 +61,27 @@ contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuar
         setFundingAddress(fundingMultisigAddress);
         mainTokenPriceInUsdt = 1_100_000_000_000_000_000;
         mainTokenInitialized = false;
-
-        allowStableToken(USDT_ADDRESS);
-        allowStableToken(FDUSD_ADDRESS);
-        allowStableToken(USDC_ADDRESS);
-        allowStableToken(DAI_ADDRESS);
-
-        bnbPriceFeed = AggregatorV3Interface(0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE);
+    }
+    
+    // Set the USDT address, used for swapAnyTokens as the destination token
+    function setUsdtAddress(address newUsdtAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newUsdtAddress != address(0), "USDT address cannot be zero");
+        usdtAddress = newUsdtAddress;
+        emit UsdtAddressSet(newUsdtAddress);
+    }
+    
+    // Set the BNB price feed address
+    function setBnbPriceFeed(address newPriceFeedAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newPriceFeedAddress != address(0), "Price feed address cannot be zero");
+        bnbPriceFeed = AggregatorV3Interface(newPriceFeedAddress);
+        emit BnbPriceFeedSet(newPriceFeedAddress);
+    }
+    
+    // Set the router address
+    function setSmartRouterAddress(address newRouterAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newRouterAddress != address(0), "Router address cannot be zero");
+        smartRouterAddress = newRouterAddress;
+        emit SmartRouterSet(newRouterAddress);
     }
 
     function setMainTokenAddress(address newMainTokenAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -115,7 +131,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuar
     }
 
     function convertBnbToUsdt(uint256 amount) public view returns (uint256) {
-        (uint80 roundId, int256 price, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) = bnbPriceFeed.latestRoundData();
+        (uint80 roundId, int256 price, , uint256 updatedAt, uint80 answeredInRound) = bnbPriceFeed.latestRoundData();
 
         require(price > 0, "Invalid price");
         require(answeredInRound >= roundId, "Stale price");
@@ -174,9 +190,12 @@ contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuar
 
         require(path.length >= 2, "Path too short");
         require(path[0] == tokenIn, "Path start must match input token");
-        require(path[path.length - 1] == USDT_ADDRESS, "Path must end with USDT");
+        require(usdtAddress != address(0), "USDT address not set");
+        require(path[path.length - 1] == usdtAddress, "Path must end with USDT");
 
-        uint256[] memory expectedAmounts = IPancakeSwapV3Router(SMART_ROUTER_ADDRESS).getAmountsOut(amountIn, path);
+        require(smartRouterAddress != address(0), "Router address not set");
+        
+        uint256[] memory expectedAmounts = IPancakeSwapV3Router(smartRouterAddress).getAmountsOut(amountIn, path);
         uint256 expectedUsdtAmount = expectedAmounts[expectedAmounts.length - 1];
         uint256 minAmountOut = (expectedUsdtAmount * (10000 - userSlippageBps)) / 10000;
 
@@ -186,10 +205,10 @@ contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuar
         uint256 actualAmountIn = tokenBalanceAfter - tokenBalanceBefore;
         require(actualAmountIn > 0, "No tokens received");
 
-        uint256 usdtBefore = IERC20(USDT_ADDRESS).balanceOf(fundingAddress);
-        IERC20(tokenIn).approve(SMART_ROUTER_ADDRESS, actualAmountIn);
-        IPancakeSwapV3Router(SMART_ROUTER_ADDRESS).swapExactTokensForTokens(actualAmountIn, minAmountOut, path, fundingAddress);
-        uint256 usdtAfter = IERC20(USDT_ADDRESS).balanceOf(fundingAddress);
+        uint256 usdtBefore = IERC20(usdtAddress).balanceOf(fundingAddress);
+        IERC20(tokenIn).approve(smartRouterAddress, actualAmountIn);
+        IPancakeSwapV3Router(smartRouterAddress).swapExactTokensForTokens(actualAmountIn, minAmountOut, path, fundingAddress);
+        uint256 usdtAfter = IERC20(usdtAddress).balanceOf(fundingAddress);
         uint256 usdtReceived = usdtAfter - usdtBefore;
         require(usdtReceived > 0, "No USDT received");
 

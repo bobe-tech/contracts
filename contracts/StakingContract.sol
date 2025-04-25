@@ -66,6 +66,14 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         totalAllocatedRewards = 0;
         totalRewardsCommitted = 0;
     }
+    
+    function setCampaignDuration(uint256 newDuration) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newDuration > 0, "Duration must be > 0");
+        require(newDuration <= 30 days, "Duration too long");
+        campaignDuration = newDuration;
+        
+        emit CampaignDurationSet(newDuration);
+    }
 
     function setTokenAddresses(address newStakingToken, address newRewardsToken) public onlyRole(DEFAULT_ADMIN_ROLE) {
         require(!tokensInitialized, "Token addresses can only be set once");
