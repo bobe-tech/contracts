@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+
 /**
  * @title MockV3Aggregator
  * @notice Based on the Chainlink MockV3Aggregator
  */
-contract MockV3Aggregator {
-    uint8 public decimals;
+contract MockV3Aggregator is AggregatorV3Interface {
+    uint8 public override decimals;
     int256 public latestAnswer;
     uint256 public latestTimestamp;
     uint256 public latestRound;
@@ -38,14 +40,30 @@ contract MockV3Aggregator {
         latestRound = _roundId;
         latestAnswer = _answer;
         latestTimestamp = _timestamp;
-        getAnswer[latestRound] = _answer;
-        getTimestamp[latestRound] = _timestamp;
-        getStartedAt[latestRound] = _startedAt;
+        getAnswer[_roundId] = _answer;
+        getTimestamp[_roundId] = _timestamp;
+        getStartedAt[_roundId] = _startedAt;
+    }
+    
+    function setRoundData(
+        uint80 _roundId,
+        int256 _answer,
+        uint256 _startedAt,
+        uint256 _updatedAt,
+        uint80 _answeredInRound
+    ) public {
+        getAnswer[_roundId] = _answer;
+        getStartedAt[_roundId] = _startedAt;
+        getTimestamp[_roundId] = _updatedAt;
+        latestRound = _roundId;
+        latestAnswer = _answer;
+        latestTimestamp = _updatedAt;
     }
 
     function getRoundData(uint80 _roundId)
         external
         view
+        override
         returns (
             uint80 roundId,
             int256 answer,
@@ -66,6 +84,7 @@ contract MockV3Aggregator {
     function latestRoundData()
         external
         view
+        override
         returns (
             uint80 roundId,
             int256 answer,
@@ -81,5 +100,13 @@ contract MockV3Aggregator {
             latestTimestamp,
             uint80(latestRound)
         );
+    }
+    
+    function description() external pure override returns (string memory) {
+        return "Mock Price Feed";
+    }
+    
+    function version() external pure override returns (uint256) {
+        return 1;
     }
 }
