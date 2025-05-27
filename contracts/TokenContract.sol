@@ -26,6 +26,7 @@ contract TokenContract is ERC20, Ownable {
     event LiquidityTransferred(address indexed to, uint256 amount);
     event MarketingTransferred(address indexed to, uint256 amount);
     event TeamTransferred(address indexed to, uint256 amount);
+    event TokensRecovered(address indexed token, address indexed recipient, uint256 amount);
 
     constructor(address multisigAddress) ERC20("Bobe.app", "BOBE") Ownable(multisigAddress) {
         require(multisigAddress != address(0), "Safe multisig address cannot be zero");
@@ -97,8 +98,12 @@ contract TokenContract is ERC20, Ownable {
 
             uint256 excessBalance = balance - totalLeft;
             token.safeTransfer(owner(), excessBalance);
+
+            emit TokensRecovered(address(token), owner(), excessBalance);
         } else {
             token.safeTransfer(owner(), balance);
+
+            emit TokensRecovered(address(token), owner(), balance);
         }
     }
 

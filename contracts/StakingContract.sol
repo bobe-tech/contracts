@@ -14,6 +14,7 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
     event Deposit(uint256 amount);
     event Announce(uint256 start, uint256 finish, uint256 amount);
+    event DepositAndAnnounce(uint256 amount, uint256 start, uint256 finish);
 
     event Stake(address user, uint256 amount);
     event Unstake(address user, uint256 amount);
@@ -137,10 +138,13 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         emit Announce(scStartTimestamp, scFinishTimestamp, scRewardsAmount);
     }
 
-    function depositAndAnnounce(uint256 depositAmount) public {
+    function depositAndAnnounce(uint256 depositAndAnnounceAmount) public {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()) || hasRole(ANNOUNCER_ROLE, _msgSender()), "Caller must be admin or announcer");
-        deposit(depositAmount);
-        announce(depositAmount);
+
+        deposit(depositAndAnnounceAmount);
+        announce(depositAndAnnounceAmount);
+
+        emit DepositAndAnnounce(depositAndAnnounceAmount, scStartTimestamp, scFinishTimestamp);
     }
 
     function getAvailableRewards() public view returns (uint256 distributedExactly, uint256 availableRewards) {
