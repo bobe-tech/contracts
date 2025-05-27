@@ -57,21 +57,27 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
     bytes32 public constant ANNOUNCER_ROLE = keccak256("ANNOUNCER_ROLE");
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(address adminMultisigAddress, address announcerMultisigAddress) public initializer {
         _grantRole(DEFAULT_ADMIN_ROLE, adminMultisigAddress);
         _grantRole(ANNOUNCER_ROLE, announcerMultisigAddress);
+
         campaignDuration = 23 hours + 58 minutes;
         setUnstakePeriod(365 days);
         tokensInitialized = false;
         totalAllocatedRewards = 0;
         totalRewardsCommitted = 0;
     }
-    
+
     function setCampaignDuration(uint256 newDuration) public onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newDuration > 0, "Duration must be > 0");
         require(newDuration <= 30 days, "Duration too long");
         campaignDuration = newDuration;
-        
+
         emit CampaignDurationSet(newDuration);
     }
 

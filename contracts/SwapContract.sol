@@ -54,35 +54,42 @@ contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuar
 
     event TokensPurchased(address indexed user, address tokenIn, uint256 tokenInAmount, uint256 usdtValue, uint256 mainTokenAmount);
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(address adminMultisigAddress, address fundingMultisigAddress) public initializer {
         __AccessControl_init();
         __ReentrancyGuard_init();
+
         _grantRole(DEFAULT_ADMIN_ROLE, adminMultisigAddress);
         setFundingAddress(fundingMultisigAddress);
+
         mainTokenPriceInUsdt = 1_100_000_000_000_000_000;
         mainTokenInitialized = false;
     }
-    
+
     // Set the USDT address, used for swapAnyTokens as the destination token
     function setUsdtAddress(address newUsdtAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newUsdtAddress != address(0), "USDT address cannot be zero");
         usdtAddress = newUsdtAddress;
-        
+
         // Automatically add USDT to allowed stable tokens if not already allowed
         if (!allowedStableTokens[newUsdtAddress]) {
             allowStableToken(newUsdtAddress);
         }
-        
+
         emit UsdtAddressSet(newUsdtAddress);
     }
-    
+
     // Set the BNB price feed address
     function setBnbPriceFeed(address newPriceFeedAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newPriceFeedAddress != address(0), "Price feed address cannot be zero");
         bnbPriceFeed = AggregatorV3Interface(newPriceFeedAddress);
         emit BnbPriceFeedSet(newPriceFeedAddress);
     }
-    
+
     // Set the router address
     function setSmartRouterAddress(address newRouterAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newRouterAddress != address(0), "Router address cannot be zero");
@@ -200,7 +207,7 @@ contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuar
         require(path[path.length - 1] == usdtAddress, "Path must end with USDT");
 
         require(smartRouterAddress != address(0), "Router address not set");
-        
+
         uint256[] memory expectedAmounts = IPancakeSwapV3Router(smartRouterAddress).getAmountsOut(amountIn, path);
         uint256 expectedUsdtAmount = expectedAmounts[expectedAmounts.length - 1];
         uint256 minAmountOut = (expectedUsdtAmount * (10000 - userSlippageBps)) / 10000;
