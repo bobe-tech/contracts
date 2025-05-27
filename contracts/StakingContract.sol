@@ -63,6 +63,8 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
     }
 
     function initialize(address adminMultisigAddress, address announcerMultisigAddress) public initializer {
+        __AccessControl_init();
+
         _grantRole(DEFAULT_ADMIN_ROLE, adminMultisigAddress);
         _grantRole(ANNOUNCER_ROLE, announcerMultisigAddress);
 
