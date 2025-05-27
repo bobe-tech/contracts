@@ -162,7 +162,12 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
             }
         }
 
+        // Calculate rewards that are committed but not yet distributed
+        // This represents our future obligations to stakers
         uint256 pendingRewards = totalRewardsCommitted > totalDistributed ? totalRewardsCommitted - totalDistributed : 0;
+
+        // Calculate available funds for the future campaigns
+        // These are deposited funds minus any pending obligations
         uint256 availableRewards = deposited > pendingRewards ? deposited - pendingRewards : 0;
 
         return (totalDistributed, availableRewards);
