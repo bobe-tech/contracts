@@ -145,18 +145,23 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
     function getAvailableRewards() public view returns (uint256 distributedExactly, uint256 availableRewards) {
         uint256 totalDistributed = 0;
+
         for (uint i = 0; i < allStakers.length; i++) {
             address staker = allStakers[i];
 
-            if (localStake[staker] > 0 || localRewards[staker] > 0) {
-                totalDistributed += rewards(staker);
+            if (localStake[staker] > 0 || localRewards[staker] > 0 || totalClaimedRewards[staker] > 0) {
+                if (localStake[staker] > 0 || localRewards[staker] > 0) {
+                    totalDistributed += rewards(staker);
+                }
+
+                totalDistributed += totalClaimedRewards[staker];
             }
-            totalDistributed += totalClaimedRewards[staker];
         }
 
-        uint256 pendingRewards = totalRewardsCommitted - distributed;
+        uint256 pendingRewards = totalRewardsCommitted > totalDistributed ? totalRewardsCommitted - totalDistributed : 0;
+        uint256 availableRewards = deposited > pendingRewards ? deposited - pendingRewards : 0;
 
-        return (totalDistributed, deposited - pendingRewards);
+        return (totalDistributed, availableRewards);
     }
 
     function stake(uint256 amount) public {
