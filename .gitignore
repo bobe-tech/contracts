@@ -24,6 +24,7 @@ typechain-types/
 .vscode/
 .idea/
 .DS_Store
+.claude/
 
 # Hardhat files
 hardhat.config.js.bak
