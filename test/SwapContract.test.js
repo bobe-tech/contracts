@@ -1,5 +1,5 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, upgrades } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
 describe("SwapContract", function () {
@@ -43,21 +43,19 @@ describe("SwapContract", function () {
     mockRouter = await mockRouterFactory.deploy(await mockUSDT.getAddress());
     await mockRouter.deploymentTransaction().wait();
     
-    // Deploy the SwapContract
+    // Deploy the SwapContract using upgrades plugin
     const SwapContract = await ethers.getContractFactory("SwapContract");
-    swapContract = await SwapContract.deploy();
-    await swapContract.deploymentTransaction().wait();
-    
-    // Initialize the SwapContract
-    await swapContract.initialize(admin.address, funding.address);
+    swapContract = await upgrades.deployProxy(
+      SwapContract,
+      [admin.address, funding.address],
+      { initializer: 'initialize' }
+    );
+    await swapContract.waitForDeployment();
     
     // Set required addresses
     await swapContract.setBnbPriceFeed(await mockPriceFeed.getAddress());
-    await swapContract.setUsdtAddress(await mockUSDT.getAddress());
+    await swapContract.setUsdtAddress(await mockUSDT.getAddress()); // This automatically allows USDT
     await swapContract.setSmartRouterAddress(await mockRouter.getAddress());
-    
-    // Allow USDT as a stablecoin
-    await swapContract.allowStableToken(await mockUSDT.getAddress());
     
     // Transfer tokens to the contract and user
     await mainToken.mint(await swapContract.getAddress(), ethers.parseEther("1000000"));
@@ -116,11 +114,12 @@ describe("SwapContract", function () {
     it("Should emit MainTokenSet event when setting main token", async function () {
       // Create a new SwapContract for this test
       const SwapContract = await ethers.getContractFactory("SwapContract");
-      const newSwapContract = await SwapContract.deploy();
-      await newSwapContract.deploymentTransaction().wait();
-      
-      // Initialize it
-      await newSwapContract.initialize(admin.address, funding.address);
+      const newSwapContract = await upgrades.deployProxy(
+        SwapContract,
+        [admin.address, funding.address],
+        { initializer: 'initialize' }
+      );
+      await newSwapContract.waitForDeployment();
       
       // Set other required addresses
       await newSwapContract.setBnbPriceFeed(await mockPriceFeed.getAddress());
@@ -192,18 +191,25 @@ describe("SwapContract", function () {
 
   describe("Token Management", function() {
     it("Should disallow a previously allowed token", async function() {
-      const usdtAddress = await mockUSDT.getAddress();
+      // Create and allow a new stable token (not USDT)
+      const MockToken = await ethers.getContractFactory("MockToken");
+      const newStableToken = await MockToken.deploy("Test Stable", "TST", 18, admin.address);
+      await newStableToken.waitForDeployment();
+      const tokenAddress = await newStableToken.getAddress();
       
-      // Verify it's allowed initially
-      expect(await swapContract.allowedStableTokens(usdtAddress)).to.be.true;
+      // Allow the token first
+      await swapContract.allowStableToken(tokenAddress);
+      
+      // Verify it's allowed
+      expect(await swapContract.allowedStableTokens(tokenAddress)).to.be.true;
       
       // Disallow the token
-      await expect(swapContract.disallowStableToken(usdtAddress))
+      await expect(swapContract.disallowStableToken(tokenAddress))
         .to.emit(swapContract, "TokenDisallowed")
-        .withArgs(usdtAddress);
+        .withArgs(tokenAddress);
       
       // Verify it's no longer allowed
-      expect(await swapContract.allowedStableTokens(usdtAddress)).to.be.false;
+      expect(await swapContract.allowedStableTokens(tokenAddress)).to.be.false;
     });
     
     it("Should revert when trying to disallow a token that's not allowed", async function() {
@@ -231,8 +237,12 @@ describe("SwapContract", function () {
     it("Should not allow setting main token address to zero", async function() {
       // Create a new contract for this test
       const SwapContract = await ethers.getContractFactory("SwapContract");
-      const newSwapContract = await SwapContract.deploy();
-      await newSwapContract.initialize(admin.address, funding.address);
+      const newSwapContract = await upgrades.deployProxy(
+        SwapContract,
+        [admin.address, funding.address],
+        { initializer: 'initialize' }
+      );
+      await newSwapContract.waitForDeployment();
       
       // Try to set the main token to zero address
       await expect(newSwapContract.setMainTokenAddress(ethers.ZeroAddress))
@@ -242,8 +252,12 @@ describe("SwapContract", function () {
     it("Should not allow setting the main token if contract has no balance", async function() {
       // Create a new SwapContract for this test
       const SwapContract = await ethers.getContractFactory("SwapContract");
-      const newSwapContract = await SwapContract.deploy();
-      await newSwapContract.initialize(admin.address, funding.address);
+      const newSwapContract = await upgrades.deployProxy(
+        SwapContract,
+        [admin.address, funding.address],
+        { initializer: 'initialize' }
+      );
+      await newSwapContract.waitForDeployment();
       
       // Try to set main token but contract has no balance
       await expect(newSwapContract.setMainTokenAddress(await mainToken.getAddress()))
@@ -332,8 +346,12 @@ describe("SwapContract", function () {
     it("Should revert when insufficient main token balance", async function() {
       // Deploy a new contract for this test
       const SwapContract = await ethers.getContractFactory("SwapContract");
-      const newSwapContract = await SwapContract.deploy();
-      await newSwapContract.initialize(admin.address, funding.address);
+      const newSwapContract = await upgrades.deployProxy(
+        SwapContract,
+        [admin.address, funding.address],
+        { initializer: 'initialize' }
+      );
+      await newSwapContract.waitForDeployment();
       await newSwapContract.setBnbPriceFeed(await mockPriceFeed.getAddress());
       
       // Mint a small amount of main tokens to the contract
@@ -432,8 +450,12 @@ describe("SwapContract", function () {
     it("Should revert when main token is not initialized", async function() {
       // Create a new contract for this test
       const SwapContract = await ethers.getContractFactory("SwapContract");
-      const newSwapContract = await SwapContract.deploy();
-      await newSwapContract.initialize(admin.address, funding.address);
+      const newSwapContract = await upgrades.deployProxy(
+        SwapContract,
+        [admin.address, funding.address],
+        { initializer: 'initialize' }
+      );
+      await newSwapContract.waitForDeployment();
       
       // Allow USDT
       await newSwapContract.allowStableToken(await mockUSDT.getAddress());

@@ -1,0 +1,32 @@
+{
+  "name": "bobe-contracts",
+  "version": "1.0.0",
+  "description": "This repository contains three main smart contracts for the Bobe.app ecosystem. Below you'll find detailed information about each contract and its functionality.",
+  "main": "hardhat.config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bobe-tech/contracts.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/bobe-tech/contracts/issues"
+  },
+  "homepage": "https://github.com/bobe-tech/contracts#readme",
+  "devDependencies": {
+    "@chainlink/contracts": "^1.4.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.3.0",
+    "@openzeppelin/contracts-upgradeable": "^5.3.0",
+    "@openzeppelin/hardhat-upgrades": "^3.9.0",
+    "ethers": "^6.14.3",
+    "hardhat": "^2.24.1"
+  }
+}
