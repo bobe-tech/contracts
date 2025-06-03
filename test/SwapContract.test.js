@@ -489,6 +489,7 @@ describe("SwapContract", function () {
       
       // Expected USDT: 100 ATK * 2 = 200 USDT
       const expectedUsdt = ethers.parseEther("200");
+      const minAmountOut = (expectedUsdt * 95n) / 100n; // 5% slippage
       
       // Expected main tokens: 200 USDT / $1.1 = 181.81... main tokens
       const expectedMainTokens = (expectedUsdt * ethers.parseEther("1")) / ethers.parseEther("1.1");
@@ -496,13 +497,24 @@ describe("SwapContract", function () {
       // Approve token spending
       await anotherToken.connect(user).approve(await swapContract.getAddress(), tokenAmount);
       
+      // Encode the swap function call for the router
+      const swapInterface = new ethers.Interface([
+        "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] calldata path, address to) external payable returns (uint256 amountOut)"
+      ]);
+      const swapCalldata = swapInterface.encodeFunctionData("swapExactTokensForTokens", [
+        tokenAmount,
+        minAmountOut,
+        path,
+        funding.address
+      ]);
+      
       // Check balances before
       const userMainTokenBefore = await mainToken.balanceOf(user.address);
       const fundingUsdtBefore = await mockUSDT.balanceOf(funding.address);
       
-      // Perform the swap with 0.5% slippage (50 bps)
+      // Perform the swap
       await expect(swapContract.connect(user).swapAnyTokens(
-        await anotherToken.getAddress(), tokenAmount, path, 50
+        await anotherToken.getAddress(), tokenAmount, swapCalldata
       )).to.emit(swapContract, "TokensPurchased");
       
       // Check balances after
@@ -516,55 +528,109 @@ describe("SwapContract", function () {
       expect(fundingUsdtAfter - fundingUsdtBefore).to.be.closeTo(expectedUsdt, ethers.parseEther("0.01"));
     });
     
-    it("Should revert when slippage is too high", async function() {
+    it("Should revert when swap fails due to slippage", async function() {
       const tokenAmount = ethers.parseEther("100"); // 100 ATK
       const path = [
         await anotherToken.getAddress(),
         await mockUSDT.getAddress()
       ];
       
+      // Expected USDT: 100 ATK * 2 = 200 USDT
+      const expectedUsdt = ethers.parseEther("200");
+      // Set minAmountOut too high to trigger failure
+      const minAmountOut = ethers.parseEther("300"); // Impossible amount
+      
       // Approve token spending
       await anotherToken.connect(user).approve(await swapContract.getAddress(), tokenAmount);
       
-      // Slippage is 10% or more (1000 bps)
+      // Encode the swap function call
+      const swapInterface = new ethers.Interface([
+        "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] calldata path, address to) external payable returns (uint256 amountOut)"
+      ]);
+      const swapCalldata = swapInterface.encodeFunctionData("swapExactTokensForTokens", [
+        tokenAmount,
+        minAmountOut,
+        path,
+        funding.address
+      ]);
+      
+      // Should revert because router will fail due to insufficient output
       await expect(swapContract.connect(user).swapAnyTokens(
-        await anotherToken.getAddress(), tokenAmount, path, 1000
-      )).to.be.revertedWith("Slippage too high");
+        await anotherToken.getAddress(), tokenAmount, swapCalldata
+      )).to.be.revertedWith("Swap failed");
     });
     
     it("Should revert when trying to swap a stable token", async function() {
       const tokenAmount = ethers.parseEther("100");
       const path = [
         await mockUSDT.getAddress(),
-        await anotherToken.getAddress(),
-        await mockUSDT.getAddress()
+        await anotherToken.getAddress()
       ];
       
+      // Encode swap calldata (won't be used but needed for the call)
+      const swapInterface = new ethers.Interface([
+        "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] calldata path, address to) external payable returns (uint256 amountOut)"
+      ]);
+      const swapCalldata = swapInterface.encodeFunctionData("swapExactTokensForTokens", [
+        tokenAmount,
+        0,
+        path,
+        funding.address
+      ]);
+      
       await expect(swapContract.connect(user).swapAnyTokens(
-        await mockUSDT.getAddress(), tokenAmount, path, 50
+        await mockUSDT.getAddress(), tokenAmount, swapCalldata
       )).to.be.revertedWith("Use swapStableTokens for stablecoins");
     });
-    
-    it("Should revert when the path is invalid", async function() {
+
+    it("Should revert when router address not set", async function() {
+      // Deploy new contract without router setup
+      const SwapContract = await ethers.getContractFactory("SwapContract");
+      const newSwapContract = await upgrades.deployProxy(
+        SwapContract,
+        [admin.address, funding.address],
+        { initializer: 'initialize' }
+      );
+      await newSwapContract.deploymentTransaction().wait();
+      
+      // Fund the contract with main tokens first
+      await mainToken.transfer(await newSwapContract.getAddress(), ethers.parseEther("1000"));
+      
+      // Set main token and USDT but not router
+      await newSwapContract.setMainTokenAddress(await mainToken.getAddress());
+      await newSwapContract.setUsdtAddress(await mockUSDT.getAddress());
+      
       const tokenAmount = ethers.parseEther("100");
+      const swapCalldata = "0x"; // Empty calldata
       
-      // Path too short
-      const shortPath = [await anotherToken.getAddress()];
-      await expect(swapContract.connect(user).swapAnyTokens(
-        await anotherToken.getAddress(), tokenAmount, shortPath, 50
-      )).to.be.revertedWith("Path too short");
+      await expect(newSwapContract.connect(user).swapAnyTokens(
+        await anotherToken.getAddress(), tokenAmount, swapCalldata
+      )).to.be.revertedWith("Router address not set");
+    });
+
+    it("Should revert when USDT address not set", async function() {
+      // Deploy new contract without USDT setup
+      const SwapContract = await ethers.getContractFactory("SwapContract");
+      const newSwapContract = await upgrades.deployProxy(
+        SwapContract,
+        [admin.address, funding.address],
+        { initializer: 'initialize' }
+      );
+      await newSwapContract.deploymentTransaction().wait();
       
-      // Path start doesn't match token
-      const mismatchPath = [await mainToken.getAddress(), await mockUSDT.getAddress()];
-      await expect(swapContract.connect(user).swapAnyTokens(
-        await anotherToken.getAddress(), tokenAmount, mismatchPath, 50
-      )).to.be.revertedWith("Path start must match input token");
+      // Fund the contract with main tokens first
+      await mainToken.transfer(await newSwapContract.getAddress(), ethers.parseEther("1000"));
       
-      // Path doesn't end with USDT
-      const wrongEndPath = [await anotherToken.getAddress(), await mainToken.getAddress()];
-      await expect(swapContract.connect(user).swapAnyTokens(
-        await anotherToken.getAddress(), tokenAmount, wrongEndPath, 50
-      )).to.be.revertedWith("Path must end with USDT");
+      // Set main token and router but not USDT
+      await newSwapContract.setMainTokenAddress(await mainToken.getAddress());
+      await newSwapContract.setSmartRouterAddress(await mockRouter.getAddress());
+      
+      const tokenAmount = ethers.parseEther("100");
+      const swapCalldata = "0x"; // Empty calldata
+      
+      await expect(newSwapContract.connect(user).swapAnyTokens(
+        await anotherToken.getAddress(), tokenAmount, swapCalldata
+      )).to.be.revertedWith("USDT address not set");
     });
   });
 
@@ -647,12 +713,22 @@ describe("SwapContract", function () {
       // 2. During transferFrom, the attack token tries to call swapStableTokens
       // 3. If reentrancy protection works, the second call should revert
       
+      // Encode the swap function call
+      const swapInterface = new ethers.Interface([
+        "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] calldata path, address to) external payable returns (uint256 amountOut)"
+      ]);
+      const swapCalldata = swapInterface.encodeFunctionData("swapExactTokensForTokens", [
+        attackAmount,
+        0, // Min amount out
+        attackerPath,
+        funding.address
+      ]);
+      
       // Execute the attack - should either revert or not process the second swap
       await expect(swapContract.connect(user).swapAnyTokens(
         await attackToken.getAddress(), 
         attackAmount, 
-        attackerPath, 
-        100 // 1% slippage
+        swapCalldata
       )).to.be.reverted;
       
       // If it didn't revert, check that only one swap happened by checking token balance
