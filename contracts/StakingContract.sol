@@ -14,6 +14,7 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
     event Deposit(uint256 amount);
     event Announce(uint256 start, uint256 finish, uint256 amount);
+    event DepositAndAnnounce(uint256 amount, uint256 start, uint256 finish);
 
     event Stake(address user, uint256 amount);
     event Unstake(address user, uint256 amount);
@@ -57,21 +58,29 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
     bytes32 public constant ANNOUNCER_ROLE = keccak256("ANNOUNCER_ROLE");
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(address adminMultisigAddress, address announcerMultisigAddress) public initializer {
+        __AccessControl_init();
+
         _grantRole(DEFAULT_ADMIN_ROLE, adminMultisigAddress);
         _grantRole(ANNOUNCER_ROLE, announcerMultisigAddress);
+
         campaignDuration = 23 hours + 58 minutes;
         setUnstakePeriod(365 days);
         tokensInitialized = false;
         totalAllocatedRewards = 0;
         totalRewardsCommitted = 0;
     }
-    
+
     function setCampaignDuration(uint256 newDuration) public onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newDuration > 0, "Duration must be > 0");
         require(newDuration <= 30 days, "Duration too long");
         campaignDuration = newDuration;
-        
+
         emit CampaignDurationSet(newDuration);
     }
 
@@ -129,26 +138,39 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         emit Announce(scStartTimestamp, scFinishTimestamp, scRewardsAmount);
     }
 
-    function depositAndAnnounce(uint256 depositAmount) public {
+    function depositAndAnnounce(uint256 depositAndAnnounceAmount) public {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()) || hasRole(ANNOUNCER_ROLE, _msgSender()), "Caller must be admin or announcer");
-        deposit(depositAmount);
-        announce(depositAmount);
+
+        deposit(depositAndAnnounceAmount);
+        announce(depositAndAnnounceAmount);
+
+        emit DepositAndAnnounce(depositAndAnnounceAmount, scStartTimestamp, scFinishTimestamp);
     }
 
     function getAvailableRewards() public view returns (uint256 distributedExactly, uint256 availableRewards) {
         uint256 totalDistributed = 0;
+
         for (uint i = 0; i < allStakers.length; i++) {
             address staker = allStakers[i];
 
-            if (localStake[staker] > 0 || localRewards[staker] > 0) {
-                totalDistributed += rewards(staker);
+            if (localStake[staker] > 0 || localRewards[staker] > 0 || totalClaimedRewards[staker] > 0) {
+                if (localStake[staker] > 0 || localRewards[staker] > 0) {
+                    totalDistributed += rewards(staker);
+                }
+
+                totalDistributed += totalClaimedRewards[staker];
             }
-            totalDistributed += totalClaimedRewards[staker];
         }
 
-        uint256 pendingRewards = totalRewardsCommitted - distributed;
+        // Calculate rewards that are committed but not yet distributed
+        // This represents our future obligations to stakers
+        uint256 pendingRewards = totalRewardsCommitted > totalDistributed ? totalRewardsCommitted - totalDistributed : 0;
 
-        return (totalDistributed, deposited - pendingRewards);
+        // Calculate available funds for the future campaigns
+        // These are deposited funds minus any pending obligations
+        uint256 availableRewards = deposited > pendingRewards ? deposited - pendingRewards : 0;
+
+        return (totalDistributed, availableRewards);
     }
 
     function stake(uint256 amount) public {

@@ -1,5 +1,5 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, upgrades } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
 describe("StakingContract", function () {
@@ -32,13 +32,14 @@ describe("StakingContract", function () {
     rewardsToken = await MockToken.deploy("Rewards Token", "RWD", 18, admin.address);
     await rewardsToken.deploymentTransaction().wait();
     
-    // Deploy the StakingContract
+    // Deploy the StakingContract using upgrades plugin
     const StakingContract = await ethers.getContractFactory("StakingContract");
-    stakingContract = await StakingContract.deploy();
-    await stakingContract.deploymentTransaction().wait();
-    
-    // Initialize the staking contract with admin and announcer multisigs
-    await stakingContract.initialize(admin.address, announcer.address);
+    stakingContract = await upgrades.deployProxy(
+      StakingContract,
+      [admin.address, announcer.address],
+      { initializer: 'initialize' }
+    );
+    await stakingContract.waitForDeployment();
     
     // Set token addresses
     await stakingContract.setTokenAddresses(
@@ -90,8 +91,12 @@ describe("StakingContract", function () {
     it("Should emit events when setting token addresses", async function () {
       // Deploy a new contract for this test
       const StakingContract = await ethers.getContractFactory("StakingContract");
-      const newStakingContract = await StakingContract.deploy();
-      await newStakingContract.initialize(admin.address, announcer.address);
+      const newStakingContract = await upgrades.deployProxy(
+        StakingContract,
+        [admin.address, announcer.address],
+        { initializer: 'initialize' }
+      );
+      await newStakingContract.waitForDeployment();
       
       const stakingTokenAddress = await stakingToken.getAddress();
       const rewardsTokenAddress = await rewardsToken.getAddress();
@@ -118,8 +123,12 @@ describe("StakingContract", function () {
     it("Should prevent setting the same token for staking and rewards", async function () {
       // Deploy a new contract for this test
       const StakingContract = await ethers.getContractFactory("StakingContract");
-      const newStakingContract = await StakingContract.deploy();
-      await newStakingContract.initialize(admin.address, announcer.address);
+      const newStakingContract = await upgrades.deployProxy(
+        StakingContract,
+        [admin.address, announcer.address],
+        { initializer: 'initialize' }
+      );
+      await newStakingContract.waitForDeployment();
       
       const tokenAddress = await stakingToken.getAddress();
       
@@ -220,8 +229,12 @@ describe("StakingContract", function () {
     it("Should revert deposit when token addresses are not set", async function () {
       // Create a new contract for this test
       const StakingContract = await ethers.getContractFactory("StakingContract");
-      const newStakingContract = await StakingContract.deploy();
-      await newStakingContract.initialize(admin.address, announcer.address);
+      const newStakingContract = await upgrades.deployProxy(
+        StakingContract,
+        [admin.address, announcer.address],
+        { initializer: 'initialize' }
+      );
+      await newStakingContract.waitForDeployment();
       
       // Try to deposit before setting token addresses
       await expect(newStakingContract.connect(admin).deposit(ethers.parseEther("100")))
@@ -458,8 +471,12 @@ describe("StakingContract", function () {
     it("Should revert stake when token addresses are not set", async function () {
       // Create a new contract for this test
       const StakingContract = await ethers.getContractFactory("StakingContract");
-      const newStakingContract = await StakingContract.deploy();
-      await newStakingContract.initialize(admin.address, announcer.address);
+      const newStakingContract = await upgrades.deployProxy(
+        StakingContract,
+        [admin.address, announcer.address],
+        { initializer: 'initialize' }
+      );
+      await newStakingContract.waitForDeployment();
       
       // Try to stake before setting token addresses
       await expect(newStakingContract.connect(user).stake(ethers.parseEther("100")))
@@ -540,8 +557,12 @@ describe("StakingContract", function () {
     it("Should revert claim when there are no rewards", async function () {
       // Create a new contract without any stake
       const StakingContract = await ethers.getContractFactory("StakingContract");
-      const newStakingContract = await StakingContract.deploy();
-      await newStakingContract.initialize(admin.address, announcer.address);
+      const newStakingContract = await upgrades.deployProxy(
+        StakingContract,
+        [admin.address, announcer.address],
+        { initializer: 'initialize' }
+      );
+      await newStakingContract.waitForDeployment();
       
       // Set token addresses
       await newStakingContract.setTokenAddresses(
@@ -570,8 +591,12 @@ describe("StakingContract", function () {
       
       // Deploy a new contract for this specific test to isolate it
       const StakingContract = await ethers.getContractFactory("StakingContract");
-      const testStakingContract = await StakingContract.deploy();
-      await testStakingContract.initialize(admin.address, announcer.address);
+      const testStakingContract = await upgrades.deployProxy(
+        StakingContract,
+        [admin.address, announcer.address],
+        { initializer: 'initialize' }
+      );
+      await testStakingContract.waitForDeployment();
       await testStakingContract.setTokenAddresses(
         await stakingToken.getAddress(),
         await rewardsToken.getAddress()

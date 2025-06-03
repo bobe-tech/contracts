@@ -26,6 +26,7 @@ contract TokenContract is ERC20, Ownable {
     event LiquidityTransferred(address indexed to, uint256 amount);
     event MarketingTransferred(address indexed to, uint256 amount);
     event TeamTransferred(address indexed to, uint256 amount);
+    event TokensRecovered(address indexed token, address indexed recipient, uint256 amount);
 
     constructor(address multisigAddress) ERC20("Bobe.app", "BOBE") Ownable(multisigAddress) {
         require(multisigAddress != address(0), "Safe multisig address cannot be zero");
@@ -97,36 +98,35 @@ contract TokenContract is ERC20, Ownable {
 
             uint256 excessBalance = balance - totalLeft;
             token.safeTransfer(owner(), excessBalance);
+
+            emit TokensRecovered(address(token), owner(), excessBalance);
         } else {
             token.safeTransfer(owner(), balance);
+
+            emit TokensRecovered(address(token), owner(), balance);
         }
     }
 
     function _getUnlockedAmount(uint256 totalSupply, uint256 unlockStart) private view returns (uint256) {
-        if (block.timestamp < unlockStart) {
-            return 0;
-        }
+        uint256 elapsedPeriods = block.timestamp >= unlockStart ? (block.timestamp - unlockStart) / UNLOCK_PERIOD : 0;
 
-        uint256 elapsedPeriods = (block.timestamp - unlockStart) / UNLOCK_PERIOD;
         if (elapsedPeriods >= UNLOCK_PORTIONS) {
-            return totalSupply;
+            elapsedPeriods = UNLOCK_PORTIONS;
         }
 
         return (totalSupply * elapsedPeriods * UNLOCK_PERCENTAGE) / 100;
     }
 
     function _getNextUnlock(uint256 totalSupply, uint256 unlockStart) private view returns (uint256 nextAmount, uint256 nextTimestamp) {
-        if (block.timestamp < unlockStart) {
-            return ((totalSupply * UNLOCK_PERCENTAGE) / 100, unlockStart);
-        }
+        uint256 elapsedPeriods = block.timestamp >= unlockStart ? (block.timestamp - unlockStart) / UNLOCK_PERIOD : 0;
 
-        uint256 elapsedPeriods = (block.timestamp - unlockStart) / UNLOCK_PERIOD;
         if (elapsedPeriods >= UNLOCK_PORTIONS) {
             return (0, 0);
         }
 
         uint256 nextPeriod = elapsedPeriods + 1;
         uint256 nextUnlockTimestamp = unlockStart + (nextPeriod * UNLOCK_PERIOD);
+
         uint256 nextTotalUnlocked = (totalSupply * nextPeriod * UNLOCK_PERCENTAGE) / 100;
         uint256 currentlyUnlocked = (totalSupply * elapsedPeriods * UNLOCK_PERCENTAGE) / 100;
 
