@@ -70,7 +70,7 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         _grantRole(ANNOUNCER_ROLE, announcerMultisigAddress);
 
         campaignDuration = 23 hours + 58 minutes;
-        setUnstakePeriod(365 days);
+        setUnstakePeriod(0 days);
         tokensInitialized = false;
         totalAllocatedRewards = 0;
         totalRewardsCommitted = 0;
