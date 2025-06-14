@@ -12,17 +12,6 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 
-interface IPancakeSwapV3Router {
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to
-    ) external payable returns (uint256 amountOut);
-
-    function getAmountsOut(uint amountIn, address[] memory path) external view returns (uint[] memory amounts);
-}
-
 contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     using Math for uint256;
     using SafeERC20 for IERC20;
