@@ -198,6 +198,8 @@ contract SwapContract is Initializable, AccessControlUpgradeable, ReentrancyGuar
         (bool success, ) = smartRouterAddress.call{value: msg.value}(swapCalldata);
         require(success, "Swap failed");
 
+        IERC20(tokenIn).approve(smartRouterAddress, 0);
+
         uint256 usdtAfter = IERC20(usdtAddress).balanceOf(fundingAddress);
         uint256 usdtReceived = usdtAfter - usdtBefore;
         require(usdtReceived > 0, "No USDT received");
