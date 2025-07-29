@@ -108,7 +108,7 @@ contract TokenContract is ERC20, Ownable {
     }
 
     function _getUnlockedAmount(uint256 totalSupply, uint256 unlockStart) private view returns (uint256) {
-        uint256 elapsedPeriods = block.timestamp >= unlockStart ? (block.timestamp - unlockStart) / UNLOCK_PERIOD : 0;
+        uint256 elapsedPeriods = block.timestamp >= unlockStart ? ((block.timestamp - unlockStart) / UNLOCK_PERIOD) + 1 : 0;
 
         if (elapsedPeriods >= UNLOCK_PORTIONS) {
             elapsedPeriods = UNLOCK_PORTIONS;
@@ -118,14 +118,14 @@ contract TokenContract is ERC20, Ownable {
     }
 
     function _getNextUnlock(uint256 totalSupply, uint256 unlockStart) private view returns (uint256 nextAmount, uint256 nextTimestamp) {
-        uint256 elapsedPeriods = block.timestamp >= unlockStart ? (block.timestamp - unlockStart) / UNLOCK_PERIOD : 0;
+        uint256 elapsedPeriods = block.timestamp >= unlockStart ? ((block.timestamp - unlockStart) / UNLOCK_PERIOD) + 1 : 0;
 
         if (elapsedPeriods >= UNLOCK_PORTIONS) {
             return (0, 0);
         }
 
         uint256 nextPeriod = elapsedPeriods + 1;
-        uint256 nextUnlockTimestamp = unlockStart + (nextPeriod * UNLOCK_PERIOD);
+        uint256 nextUnlockTimestamp = unlockStart + (elapsedPeriods * UNLOCK_PERIOD);
 
         uint256 nextTotalUnlocked = (totalSupply * nextPeriod * UNLOCK_PERCENTAGE) / 100;
         uint256 currentlyUnlocked = (totalSupply * elapsedPeriods * UNLOCK_PERCENTAGE) / 100;
