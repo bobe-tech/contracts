@@ -25,6 +25,7 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
     event UnstakePeriodSet(uint256 period);
 
     address[] public allStakers;
+    uint256 public totalActiveStakers;
 
     address public stakingToken;
     address public rewardsToken;
@@ -32,7 +33,6 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
     uint256 public deposited;
     uint256 public distributed;
-    uint256 public totalAllocatedRewards;
     uint256 public totalRewardsCommitted;
 
     uint256 public campaignDuration;
@@ -70,10 +70,10 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         _grantRole(ANNOUNCER_ROLE, announcerMultisigAddress);
 
         campaignDuration = 23 hours + 58 minutes;
-        setUnstakePeriod(0 days);
+        unstakePeriod = 0 days;
         tokensInitialized = false;
-        totalAllocatedRewards = 0;
         totalRewardsCommitted = 0;
+        totalActiveStakers = 0;
     }
 
     function setCampaignDuration(uint256 newDuration) public onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -98,8 +98,8 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
     }
 
     function setUnstakePeriod(uint256 newPeriod) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(newPeriod > 0, "Duration must be > 0");
-        require(newPeriod <= 365 days, "Duration too long");
+        require(newPeriod >= 0, "Period must be >= 0");
+        require(newPeriod <= 365 days, "Period too long");
         unstakePeriod = newPeriod;
 
         emit UnstakePeriodSet(newPeriod);
@@ -147,32 +147,6 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         emit DepositAndAnnounce(depositAndAnnounceAmount, scStartTimestamp, scFinishTimestamp);
     }
 
-    function getAvailableRewards() public view returns (uint256 distributedExactly, uint256 availableRewards) {
-        uint256 totalDistributed = 0;
-
-        for (uint i = 0; i < allStakers.length; i++) {
-            address staker = allStakers[i];
-
-            if (localStake[staker] > 0 || localRewards[staker] > 0 || totalClaimedRewards[staker] > 0) {
-                if (localStake[staker] > 0 || localRewards[staker] > 0) {
-                    totalDistributed += rewards(staker);
-                }
-
-                totalDistributed += totalClaimedRewards[staker];
-            }
-        }
-
-        // Calculate rewards that are committed but not yet distributed
-        // This represents our future obligations to stakers
-        uint256 pendingRewards = totalRewardsCommitted > totalDistributed ? totalRewardsCommitted - totalDistributed : 0;
-
-        // Calculate available funds for the future campaigns
-        // These are deposited funds minus any pending obligations
-        uint256 availableRewards = deposited > pendingRewards ? deposited - pendingRewards : 0;
-
-        return (totalDistributed, availableRewards);
-    }
-
     function stake(uint256 amount) public {
         require(amount > 0, "Amount must be > 0");
         require(tokensInitialized, "Token addresses must be set first");
@@ -184,10 +158,16 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
             allStakers.push(_msgSender());
         }
 
+        if (localStake[_msgSender()] == 0) {
+            totalActiveStakers++;
+        }
+
         uint256 balanceBefore = IERC20(stakingToken).balanceOf(address(this));
         IERC20(stakingToken).safeTransferFrom(_msgSender(), address(this), amount);
         uint256 balanceAfter = IERC20(stakingToken).balanceOf(address(this));
         uint256 actualAmount = balanceAfter - balanceBefore;
+
+        require(actualAmount > 0, "Transfer amount must be > 0");
 
         globalStake += actualAmount;
         localStake[_msgSender()] += actualAmount;
@@ -209,8 +189,11 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
 
         globalStake -= amount;
         localStake[_msgSender()] -= amount;
-
         totalUnstaked[_msgSender()] += amount;
+
+        if (localStake[_msgSender()] == 0) {
+            totalActiveStakers--;
+        }
 
         IERC20(stakingToken).safeTransfer(_msgSender(), amount);
 
@@ -338,15 +321,6 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
             uint256 rewardRatePerToken
         )
     {
-        uint256 currentStakerCount = 0;
-        for (uint i = 0; i < allStakers.length; i++) {
-            if (localStake[allStakers[i]] > 0) {
-                currentStakerCount++;
-            }
-        }
-
-        (uint256 distributedExactly, uint256 availableRewards) = getAvailableRewards();
-
         uint256 currentRate = 0;
         if (scFinishTimestamp > 0 && scStartTimestamp > 0) {
             currentRate = _rate();
@@ -355,9 +329,9 @@ contract StakingContract is Initializable, AccessControlUpgradeable {
         return (
             globalStake,
             allStakers.length,
-            currentStakerCount,
-            distributedExactly,
-            availableRewards,
+            totalActiveStakers,
+            totalRewardsCommitted,
+            deposited - totalRewardsCommitted,
             scRewardsAmount,
             scStartTimestamp,
             scFinishTimestamp,
