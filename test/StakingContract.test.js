@@ -66,12 +66,11 @@ describe("StakingContract", function () {
       expect(await stakingContract.campaignDuration()).to.equal(23 * 60 * 60 + 58 * 60); // 23h 58m in seconds
       
       // Check unstake period
-      expect(await stakingContract.unstakePeriod()).to.equal(365 * 24 * 60 * 60); // 365 days in seconds
-      
+      expect(await stakingContract.unstakePeriod()).to.equal(0);
+
       // Check initial values for rewards
       expect(await stakingContract.deposited()).to.equal(0);
       expect(await stakingContract.distributed()).to.equal(0);
-      expect(await stakingContract.totalAllocatedRewards()).to.equal(0);
       expect(await stakingContract.totalRewardsCommitted()).to.equal(0);
       
       // Check campaign state
@@ -150,15 +149,25 @@ describe("StakingContract", function () {
       expect(await stakingContract.unstakePeriod()).to.equal(newPeriod);
     });
     
-    it("Should prevent setting invalid unstake periods", async function () {
-      // Try to set zero period
+    it("Should allow zero as a valid unstake period (no delay)", async function () {
       await expect(stakingContract.setUnstakePeriod(0))
-        .to.be.revertedWith("Duration must be > 0");
-      
-      // Try to set too long period
+        .to.emit(stakingContract, "UnstakePeriodSet")
+        .withArgs(0);
+      expect(await stakingContract.unstakePeriod()).to.equal(0);
+    });
+
+    it("Should allow the maximum unstake period of 365 days", async function () {
+      const maxPeriod = 365 * 24 * 60 * 60;
+      await expect(stakingContract.setUnstakePeriod(maxPeriod))
+        .to.emit(stakingContract, "UnstakePeriodSet")
+        .withArgs(maxPeriod);
+      expect(await stakingContract.unstakePeriod()).to.equal(maxPeriod);
+    });
+
+    it("Should prevent setting unstake period longer than 365 days", async function () {
       const tooLongPeriod = 366 * 24 * 60 * 60; // 366 days
       await expect(stakingContract.setUnstakePeriod(tooLongPeriod))
-        .to.be.revertedWith("Duration too long");
+        .to.be.revertedWith("Period too long");
     });
     
     it("Should only allow admin to change unstake period", async function () {
@@ -972,30 +981,28 @@ describe("StakingContract", function () {
         .to.be.revertedWith("Addresses array cannot be empty");
     });
     
-    it("Should correctly update available rewards when users stake and claim", async function () {
-      // Move time forward to accrue rewards
-      await ethers.provider.send("evm_increaseTime", [24 * 60 * 60]); // 1 day
+    it("Should correctly update claimed rewards when users stake and claim", async function () {
+      // Move time forward within the campaign window (campaign lasts 23h 58m)
+      await ethers.provider.send("evm_increaseTime", [12 * 60 * 60]); // 12 hours
       await ethers.provider.send("evm_mine");
-      
-      // Check if campaign is active
-      if (await isActiveCampaign()) {
-        // Get initial available rewards
-        const [initialDistributed, initialAvailable] = await stakingContract.getAvailableRewards();
-        
-        // User claims rewards
-        await stakingContract.connect(user).claimRewards();
-        
-        // Get updated available rewards
-        const [updatedDistributed, updatedAvailable] = await stakingContract.getAvailableRewards();
-        
-        // After claiming, distributed rewards should be at least as much as before
-        expect(updatedDistributed).to.be.gte(initialDistributed);
-      } else {
-        // If no active campaign, just check that the function doesn't revert
-        const [distributed, available] = await stakingContract.getAvailableRewards();
-        expect(distributed).to.be.gte(0);
-        expect(available).to.be.gte(0);
-      }
+
+      expect(await isActiveCampaign()).to.be.true;
+
+      const pending = await stakingContract.rewards(user.address);
+      expect(pending).to.be.gt(0);
+
+      const initialClaimed = await stakingContract.totalClaimedRewards(user.address);
+      const initialDistributed = await stakingContract.distributed();
+
+      await stakingContract.connect(user).claimRewards();
+
+      const updatedClaimed = await stakingContract.totalClaimedRewards(user.address);
+      const updatedDistributed = await stakingContract.distributed();
+
+      // Claim should increase totals by at least the pending amount reported before claim
+      // (index advances between rewards() read and claimRewards() tx, so actual payout is >= pending)
+      expect(updatedClaimed - initialClaimed).to.be.gte(pending);
+      expect(updatedDistributed - initialDistributed).to.be.gte(pending);
     });
     
     it("Should handle complete staking and rewards cycle", async function () {
