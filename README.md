@@ -69,7 +69,7 @@ An ERC20 token with additional distribution and vesting mechanics.
 - `recoverTokens`: Allows recovery of tokens sent to the contract accidentally
 - `teamUnlockIn`: Shows remaining time until team tokens unlock
 
-### 2. SwapContract → SwapContractV2 (Token Purchase)
+### 2. SwapContract → SwapContractV3 (Token Purchase)
 
 An upgradeable contract (transparent proxy) for purchasing the main token using various payment methods.
 
@@ -79,21 +79,26 @@ An upgradeable contract (transparent proxy) for purchasing the main token using 
 - Dynamic price feed integration using Chainlink
 - Custom token swap support through PancakeSwap Router
 - **V2: Recipient-aware swaps** — buy tokens on behalf of another address
+- **V3: Configurable main token price** — admin can update the token price on-chain
 
 **Main Functions (V1, preserved):**
 - `swapNativeToken`: Purchase tokens with BNB (recipient = caller)
 - `swapStableTokens`: Purchase tokens with supported stablecoins (recipient = caller)
 - `swapAnyTokens`: Purchase tokens with any token through PancakeSwap Router (recipient = caller)
 
-**New Functions (V2):**
+**Functions (V2):**
 - `swapNativeTokenTo(recipient)`: Purchase tokens with BNB, send to specified recipient
 - `swapStableTokensTo(recipient, token, amount)`: Same for stablecoins
 - `swapAnyTokensTo(recipient, tokenIn, amount, calldata)`: Same for any token via Router
+
+**Functions (V3):**
+- `setMainTokenPrice(newPrice)`: Update the main token price in USDT (18 decimals); admin-only, emits `MainTokenPriceUpdated`
 
 **Admin Functions:**
 - `allowStableToken` / `disallowStableToken`: Manage supported stablecoins
 - `setUsdtAddress`, `setBnbPriceFeed`, `setSmartRouterAddress`, `setFundingAddress`
 - `setMainTokenAddress`: Set main token (one-time)
+- `setMainTokenPrice`: Update the main token price (V3)
 
 ### 3. StakingContract (Staking Mechanism)
 
